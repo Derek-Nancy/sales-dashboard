@@ -196,7 +196,7 @@ function initData(data) {
   var xhr = new XMLHttpRequest();
   xhr.open('GET', 'data.json', true);
   xhr.onload = function() {
-    if (xhr.status === 200) { try { initData(JSON.parse(xhr.responseText)); return; } catch(e) {} }
+    if (xhr.status === 200) { try { var d = JSON.parse(xhr.responseText); if (d.sellerAgg && d.sellerAgg.length > 0) { initData(d); return; } } catch(e) {} }
     loadInlineData();
   };
   xhr.onerror = function() { loadInlineData(); };
@@ -838,9 +838,9 @@ document.getElementById('fSeller').addEventListener('change', function(){if(DATA
 function loadInlineData() {
   // Try loading embed_data.js as fallback
   var s = document.createElement('script');
-  s.src = 'embed_data.js';
+  s.src = 'embed_data.js?_t=' + new Date().getTime();
   s.onload = function() {
-    if (typeof EMBEDDED_DATA !== 'undefined' && EMBEDDED_DATA && EMBEDDED_DATA.sellerAgg) {
+    if (typeof EMBEDDED_DATA !== 'undefined' && EMBEDDED_DATA && EMBEDDED_DATA.sellerAgg && EMBEDDED_DATA.sellerAgg.length > 0) {
       initData(EMBEDDED_DATA);
     }
   };
