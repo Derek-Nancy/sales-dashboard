@@ -255,17 +255,18 @@ function buildCompareOptions() {
   ['A','B'].forEach(function(sfx) {
     var selD=document.getElementById('fDate'+sfx), selT=document.getElementById('fTeam'+sfx), selS=document.getElementById('fSeller'+sfx);
     if(!selD)return;
-    // Show all options for compare (simpler UX)
+    // Save current values before rebuild
+    var svD = selD.value, svT = selT.value, svS = selS.value;
     selD.innerHTML='<option value="all">📅 全部营期</option>';
     DATA.dates.forEach(function(d){selD.innerHTML+='<option value="'+d+'">'+d.replace('VT','')+'</option>';});
     selT.innerHTML='<option value="all">👥 全部小组</option>';
     DATA.teams.forEach(function(t){selT.innerHTML+='<option value="'+t+'">'+t+'</option>';});
     selS.innerHTML='<option value="all">🧑 全部销售</option>';
     DATA.sellers.forEach(function(s){selS.innerHTML+='<option value="'+s+'">'+s+'</option>';});
-    // Restore values
-    if(selD.getAttribute('data-val'))selD.value=selD.getAttribute('data-val');
-    if(selT.getAttribute('data-val'))selT.value=selT.getAttribute('data-val');
-    if(selS.getAttribute('data-val'))selS.value=selS.getAttribute('data-val');
+    // Restore
+    if (svD && svD !== 'all' && Array.from(selD.options).some(function(o){return o.value===svD;})) selD.value = svD;
+    if (svT && svT !== 'all' && Array.from(selT.options).some(function(o){return o.value===svT;})) selT.value = svT;
+    if (svS && svS !== 'all' && Array.from(selS.options).some(function(o){return o.value===svS;})) selS.value = svS;
   });
 }
 
@@ -329,7 +330,7 @@ function renderNormal(grid) {
     var names=Object.keys(agg).sort(function(a,b){return agg[b].g-agg[a].g;});
     if(!names.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
     var clrs=['#FF6B6B','#F39C12','#3498DB','#2ECC71','#9B59B6'];
-    Plotly.newPlot(div,[{x:names.map(function(n){return agg[n].g;}),y:names,type:'bar',orientation:'h',marker:{color:clrs.slice(0,names.length)},textposition:'outside'}],{margin:{t:5,r:80,b:20,l:65},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickformat:','}},{responsive:true});
+    Plotly.newPlot(div,[{x:names.map(function(n){return agg[n].g;}),y:names,type:'bar',orientation:'h',marker:{color:clrs.slice(0,names.length)},textposition:'outside'}],{margin:{t:5,r:80,b:20,l:65},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickformat:','},yaxis:{autorange:'reversed'}},{responsive:true});
   });
 
   addChart(grid,'📞 声测率趋势',1,function(div){
@@ -338,7 +339,7 @@ function renderNormal(grid) {
     if(!keys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
     Plotly.newPlot(div,[
       {x:keys,y:keys.map(function(k){return agg[k].s/agg[k].c;}),type:'scatter',mode:'lines+markers',name:'声测率',line:{color:'#e74c3c',width:3},marker:{size:8}},
-      {x:keys,y:keys.map(function(){return 0.2;}),type:'scatter',mode:'lines',line:{color:'#e74c3c',width:1,dash:'dash'},name:'⚠️20%警戒线'}
+      {x:keys,y:keys.map(function(){return 0.4;}),type:'scatter',mode:'lines',line:{color:'#e74c3c',width:1,dash:'dash'},name:'⚠️40%警戒线'}
     ],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:'.0%'}},{responsive:true});
   });
 
@@ -359,7 +360,7 @@ function renderNormal(grid) {
     if(!top.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
     var clrs={'奇文组':'#e74c3c','奇怡组':'#f39c12','奇飞组':'#3498db','奇豪组':'#2ecc71','奇可组':'#9b59b6'};
     var names=top.map(function(s,i){var m=['🥇','🥈','🥉'];return (i<3?m[i]+' ':'')+s['花名'];});
-    Plotly.newPlot(div,[{x:top.map(function(s){return s['GMV '];}),y:names,type:'bar',orientation:'h',marker:{color:top.map(function(s){return clrs[s['小组']]||'#999';})},textposition:'outside'}],{margin:{t:5,r:110,b:20,l:80},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickformat:','},height:Math.max(300,top.length*34+50)},{responsive:true});
+    Plotly.newPlot(div,[{x:top.map(function(s){return s['GMV '];}),y:names,type:'bar',orientation:'h',marker:{color:top.map(function(s){return clrs[s['小组']]||'#999';})},textposition:'outside'}],{margin:{t:5,r:110,b:20,l:80},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickformat:','},yaxis:{autorange:'reversed'},height:Math.max(300,top.length*34+50)},{responsive:true});
   });
 
   // Detail Table
@@ -546,6 +547,20 @@ document.getElementById('resetBtn').addEventListener('click', function() {
 document.getElementById('fDate').addEventListener('change', function(){if(DATA){buildOptions();render();}});
 document.getElementById('fTeam').addEventListener('change', function(){if(DATA){buildOptions();render();}});
 document.getElementById('fSeller').addEventListener('change', function(){if(DATA){buildOptions();render();}});
+
+// Compare mode filter events - bind all A and B selectors
+function bindCompareEvents() {
+  ['A','B'].forEach(function(sfx) {
+    ['Date','Team','Seller'].forEach(function(k) {
+      var el = document.getElementById('f'+k+sfx);
+      if (el) el.onchange = function() {
+        if (!DATA) return;
+        if (isCompare) render();
+      };
+    });
+  });
+}
+bindCompareEvents();
 
 function loadInlineData() {
   // Try loading embed_data.js as fallback
