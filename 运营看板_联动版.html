@@ -302,14 +302,14 @@ function buildNormalOptions() {
   // Filter sellers/sellerAgg by month first
   var monthSellers = new Set();
   sellerAgg.forEach(function(s) {
-    if (selMonth === 'all' || s['绩效月'] === selMonth) {
+    if (selMonth === 'all' || s['大期'].some(function(p){return DATA.dateToMonth[p]===selMonth;})) {
       monthSellers.add(s['花名']);
     }
   });
 
   var availDates = new Set();
   if (selSeller !== 'all') {
-    sellerAgg.forEach(function(s){if(s['花名']===selSeller && (selMonth==='all'||s['绩效月']===selMonth)) s['大期'].forEach(function(d){availDates.add(d);});});
+    sellerAgg.forEach(function(s){if(s['花名']===selSeller && (selMonth==='all'||s['大期'].some(function(p){return DATA.dateToMonth[p]===selMonth;}))) s['大期'].forEach(function(d){availDates.add(d);});});
   } else if (selTeam !== 'all') {
     Object.keys(DATA.dateToTeam).forEach(function(d){
       if (DATA.dateToTeam[d].indexOf(selTeam) >= 0 && (selMonth === 'all' || DATA.dateToMonth[d] === selMonth)) availDates.add(d);
@@ -418,7 +418,7 @@ document.getElementById('clearDateChips').addEventListener('click', function() {
 function getFiltered(mv,dv,tv,sv) {
   var m=mv||document.getElementById('fMonth').value, d=dv||document.getElementById('fDate').value, t=tv||document.getElementById('fTeam').value, s=sv||document.getElementById('fSeller').value;
   var list=sellerAgg.slice();
-  if(m!=='all')list=list.filter(function(x){return x['绩效月']===m;});
+  if(m!=='all')list=list.filter(function(x){return x['大期'].some(function(p){return DATA.dateToMonth[p]===m;});});
   if(d!=='all')list=list.filter(function(x){return x['大期'].indexOf(d)>=0;});
   if(t!=='all')list=list.filter(function(x){return x['小组']===t;});
   if(s!=='all')list=list.filter(function(x){return x['花名']===s;});
