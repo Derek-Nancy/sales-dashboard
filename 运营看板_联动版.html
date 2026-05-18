@@ -122,6 +122,7 @@ tr:hover{background:#f5f7fc}
   .card{padding:12px 16px;min-width:120px}
   .card .num{font-size:22px}
 }
+.card-diff{font-size:11px;margin-top:3px;font-weight:600}
 </style>
 </head>
 <body>
@@ -131,9 +132,9 @@ tr:hover{background:#f5f7fc}
   <div class="sub">多维度数据透视 · 支持时间对比与排序</div>
 </div>
 <div class="cards">
-  <div class="card assign"><div class="num" id="numAssign">-</div><div class="lbl">📦 总分配数</div></div>
-  <div class="card gmv"><div class="num" id="numGmv">-</div><div class="lbl">💰 总GMV</div></div>
-  <div class="card r"><div class="num" id="numR">-</div><div class="lbl">📈 R值 (GMV÷分配数)</div></div>
+  <div class="card assign"><div class="num" id="numAssign">-</div><div class="lbl">📦 总分配数</div><div class="card-diff" id="diffAssign"></div></div>
+  <div class="card gmv"><div class="num" id="numGmv">-</div><div class="lbl">💰 总GMV</div><div class="card-diff" id="diffGmv"></div></div>
+  <div class="card r"><div class="num" id="numR">-</div><div class="lbl">📈 R值 (GMV÷分配数)</div><div class="card-diff" id="diffR"></div></div>
 </div>
 <div class="filter-bar">
   <button id="cmpToggle" class="compare-toggle">🔁 对比模式</button>
@@ -445,6 +446,35 @@ function renderNormal(grid) {
   document.getElementById('numGmv').textContent='¥'+filter.gmvTotal.toLocaleString();
   document.getElementById('numR').textContent=filter.rVal;
 
+  // Calculate MoM (period-over-period) change
+  function calcMoM(fn) {
+    var dates = DATA.dates.filter(function(d){return document.getElementById('fMonth').value==='all'||DATA.dateToMonth[d]===document.getElementById('fMonth').value;}).sort();
+    if (dates.length < 2) { document.getElementById('diff'+fn).textContent=''; return; }
+    var lastDate = dates[dates.length-1], prevDate = dates[dates.length-2];
+    var allList = sellerAgg.slice();
+    var m = document.getElementById('fMonth').value, t = document.getElementById('fTeam').value, s = document.getElementById('fSeller').value;
+    if(m!=='all')allList=allList.filter(function(x){return x['绩效月']===m;});
+    if(t!=='all')allList=allList.filter(function(x){return x['小组']===t;});
+    if(s!=='all')allList=allList.filter(function(x){return x['花名']===s;});
+    var last = allList.filter(function(x){return x['大期'].indexOf(lastDate)>=0;});
+    var prev = allList.filter(function(x){return x['大期'].indexOf(prevDate)>=0;});
+    var lA=last.reduce(function(a,x){return a+x['分配数'];},0), pA=prev.reduce(function(a,x){return a+x['分配数'];},0);
+    var lG=last.reduce(function(a,x){return a+x['GMV '];},0), pG=prev.reduce(function(a,x){return a+x['GMV '];},0);
+    var lR=lA>0?lG/lA:0, pR=pA>0?pG/pA:0;
+    var val, pVal, label;
+    if (fn==='Assign') { val=lA; pVal=pA; label='分配数'; }
+    else if (fn==='Gmv') { val=lG; pVal=pG; label='GMV'; }
+    else { val=lR; pVal=pR; label='R值'; }
+    var diff = pVal>0 ? ((val-pVal)/pVal*100) : 0;
+    var arrow = diff>0?'▲':'▼';
+    var color = diff>=0?'#27ae60':'#e74c3c';
+    var el = document.getElementById('diff'+fn);
+    if (pVal===0) { el.textContent=''; return; }
+    el.innerHTML = '较上期 <span style="color:'+color+'">'+arrow+Math.abs(diff).toFixed(1)+'%</span>';
+    el.title = label+' 上期:'+pVal.toLocaleString()+' 本期:'+val.toLocaleString();
+  }
+  calcMoM('Assign'); calcMoM('Gmv'); calcMoM('R');
+
   // Get multi-date filter for contrast
   var mc = Array.from(selectedDates);
   var multiCompare = mc.length > 1;
@@ -480,14 +510,20 @@ function renderNormal(grid) {
         legend:{orientation:'h',y:1.08,x:0},barmode:'group',hovermode:'x unified'
       },{responsive:true});
     } else {
-      // Single mode - original chart
+      // Single mode - original chart with moving average
       var agg={};filter.list.forEach(function(x){x['大期'].forEach(function(d){if(!agg[d])agg[d]={g:0,a:0};agg[d].g+=x['GMV '];agg[d].a+=x['分配数'];});});
       var keys=Object.keys(agg).sort();
       if(!keys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+      var gmvVals=keys.map(function(k){return agg[k].g;});
+      var maVals=gmvVals.map(function(v,i){
+        if(i<2)return null;
+        return (gmvVals[i-2]+gmvVals[i-1]+gmvVals[i])/3;
+      });
       Plotly.newPlot(div,[
-        {x:keys,y:keys.map(function(k){return agg[k].g;}),type:'bar',name:'GMV',marker:{color:'#e74c3c',opacity:0.8},hovertemplate:'%{x}<br>GMV: ¥%{y:,}<extra></extra>',yaxis:'y'},
+        {x:keys,y:gmvVals,type:'bar',name:'GMV',marker:{color:'#e74c3c',opacity:0.8},hovertemplate:'%{x}<br>GMV: ¥%{y:,}<extra></extra>',yaxis:'y'},
+        {x:keys,y:maVals,type:'scatter',mode:'lines',name:'3期移动均线',line:{color:'#e74c3c',width:2,dash:'dot'},connectgaps:false,yaxis:'y'},
         {x:keys,y:keys.map(function(k){return agg[k].a>0?agg[k].g/agg[k].a:0;}),type:'scatter',mode:'lines+markers',name:'R值(元/人)',line:{color:'#27ae60',width:3},marker:{size:9,symbol:'diamond'},yaxis:'y2'}
-      ],{margin:{t:8,r:60,b:35,l:55},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:','},yaxis2:{overlaying:'y',side:'right',tickprefix:'¥',title:{text:'R值'}},legend:{orientation:'h',y:1.08,x:0.3},hovermode:'x unified'},{responsive:true});
+      ],{margin:{t:8,r:60,b:35,l:55},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:','},yaxis2:{overlaying:'y',side:'right',tickprefix:'¥',title:{text:'R值'}},legend:{orientation:'h',y:1.08,x:0.1},hovermode:'x unified'},{responsive:true});
     }
   });
 
@@ -519,6 +555,26 @@ function renderNormal(grid) {
     ],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:'.0%'}},{responsive:true});
   });
 
+  // Funnel chart
+  addChart(grid,'🔽 转化漏斗','full',function(div){
+    var totalAssign = filter.list.reduce(function(a,x){return a+x['分配数'];},0);
+    var totalShengCe = filter.list.reduce(function(a,x){return a+Math.round(x['分配数']*x['声测率']);},0);
+    var totalD0 = filter.list.reduce(function(a,x){return a+Math.round(x['分配数']*x['D0到课率']);},0);
+    var totalD1 = filter.list.reduce(function(a,x){return a+Math.round(x['分配数']*x['D1到课率']);},0);
+    if (totalAssign === 0) { div.innerHTML = '<div class=\"empty-state\">暂无数据</div>'; return; }
+    var scRate = totalAssign>0?((totalShengCe/totalAssign)*100).toFixed(1):'0';
+    var d0Rate = totalShengCe>0?((totalD0/totalShengCe)*100).toFixed(1):'0';
+    var d1Rate = totalD0>0?((totalD1/totalD0)*100).toFixed(1):'0';
+    Plotly.newPlot(div,[{
+      type:'funnel',
+      y:['📦 分配数','📞 声测('+scRate+'%)','📖 D0到课('+d0Rate+'%)','✅ D1到课('+d1Rate+'%)'],
+      x:[totalAssign,totalShengCe,totalD0,totalD1],
+      textinfo:'value+percent previous',
+      textfont:{size:13},
+      marker:{color:['#3498db','#f39c12','#e74c3c','#2ecc71']}
+    }],{margin:{t:8,r:80,b:20,l:100},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)'},{responsive:true});
+  });
+
   // Seller ranking
   var sList = getSortedList(filter);
   addChart(grid,'🏅 销售排行 TOP'+Math.min(sList.length,15),'full',function(div){
@@ -535,6 +591,31 @@ function renderNormal(grid) {
     div.innerHTML = buildSortBarUI() + buildTable(items);
     setTimeout(function(){bindSortEvents();},30);
   });
+
+  // Alert block: low performers
+  addChart(grid,'⚠️ 需关注销售','full',function(div){
+    var lowR = filter.list.filter(function(x){return x['R值(元/人)'] < 60;});
+    var lowSC = filter.list.filter(function(x){return (x['声测率']*100) < 40;});
+    var bothLow = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['声测率']*100) < 40;});
+    if (lowR.length === 0 && lowSC.length === 0) {
+      div.innerHTML = '<div class="empty-state" style="color:#27ae60">✅ 当前筛选范围内无需要关注的销售</div>';
+      return;
+    }
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
+    html += '<div style="background:#fff5f5;border-radius:10px;padding:10px;border:1px solid #fcc"><div style="font-size:12px;color:#e74c3c;font-weight:700">🔴 低R值 (<60)</div><div style="margin-top:6px">';
+    lowR.forEach(function(s){html += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fde8e8;border-radius:10px;font-size:11px;color:#c0392b">'+s['花名']+' ¥'+s['R值(元/人)']+'</span>';});
+    if (lowR.length === 0) html += '<span style="color:#999;font-size:12px">-</span>';
+    html += '</div></div>';
+    html += '<div style="background:#fffef5;border-radius:10px;padding:10px;border:1px solid #ffddaa"><div style="font-size:12px;color:#e67e22;font-weight:700">🟡 低声测率 (<40%)</div><div style="margin-top:6px">';
+    lowSC.forEach(function(s){html += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fef7e0;border-radius:10px;font-size:11px;color:#d35400">'+s['花名']+' '+(s['声测率']*100).toFixed(1)+'%</span>';});
+    if (lowSC.length === 0) html += '<span style="color:#999;font-size:12px">-</span>';
+    html += '</div></div>';
+    html += '<div style="background:#fff0f0;border-radius:10px;padding:10px;border:1px solid #faa"><div style="font-size:12px;color:#c0392b;font-weight:700">🔴 双重预警（R值+声测率）</div><div style="margin-top:6px">';
+    bothLow.forEach(function(s){html += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fdd;border-radius:10px;font-size:11px;color:#c0392b;font-weight:700">'+s['花名']+'</span>';});
+    if (bothLow.length === 0) html += '<span style="color:#999;font-size:12px">-</span>';
+    html += '</div></div></div>';
+    div.innerHTML = html;
+  });
 }
 
 function getSortedList(filter) {
@@ -548,7 +629,7 @@ function getSortedList(filter) {
 function buildSortBarUI() {
   var fields=[['GMV ','GMV'],['分配数','分配数'],['R值(元/人)','R值'],['声测率','声测率'],['D0到课率','D0到课率'],['D1到课率','D1到课率'],['R值完成率','R值完成率']];
   var opts=fields.map(function(f){return '<option value="'+f[0]+'"'+(sortField===f[0]?' selected':'')+'>'+f[1]+'</option>';}).join('');
-  return '<div class="sort-bar"><label>🔽 按:</label><select id="sortField">'+opts+'</select><button id="sortDirBtn">'+'▼ '+'</button><span style="color:#ccc;margin:0 4px">|</span><button class="top-btn'+(topN===0?' on':'')+'" data-n="0">全部</button><button class="top-btn'+(topN===10?' on':'')+'" data-n="10">前10</button><button class="top-btn'+(topN===20?' on':'')+'" data-n="20">前20</button></div>';
+  return '<div class="sort-bar"><label>🔽 按:</label><select id="sortField">'+opts+'</select><button id="sortDirBtn">'+'▼ '+'</button><span style="color:#ccc;margin:0 4px">|</span><button class="top-btn'+(topN===0?' on':'')+'" data-n="0">全部</button><button class="top-btn'+(topN===10?' on':'')+'" data-n="10">前10</button><button class="top-btn'+(topN===20?' on':'')+'" data-n="20">前20</button><span style="color:#ccc;margin:0 4px">|</span><button id="exportCsvBtn" style="padding:4px 10px;border:1px solid #27ae60;border-radius:6px;font-size:11px;background:#e8f8e8;color:#27ae60;cursor:pointer;font-weight:600">📥 导出CSV</button></div>';
 }
 
 function bindSortEvents() {
@@ -557,6 +638,21 @@ function bindSortEvents() {
   var dir=document.getElementById('sortDirBtn');
   if(dir)dir.onclick=function(){sortDesc=!sortDesc;dir.textContent=sortDesc?'▼ ':'▲ ';render();};
   document.querySelectorAll('.top-btn').forEach(function(b){b.onclick=function(){topN=parseInt(this.getAttribute('data-n'));render();};});
+  var csvBtn = document.getElementById('exportCsvBtn');
+  if (csvBtn) csvBtn.onclick = function() {
+    var filter = getFiltered();
+    var list = getSortedList(filter);
+    var csv = '\uFEFF花名,小组,参与期数,分配数,GMV,R值,R值完成率,声测率,D0到课率,D1到课率\n';
+    list.forEach(function(s){
+      var r=s['GMV ']>0&&s['分配数']>0?(s['GMV ']/s['分配数']).toFixed(2):'-';
+      csv += s['花名']+','+s['小组']+','+s['参与期数']+'期/'+s['次数']+'次,'+s['分配数']+','+s['GMV ']+','+r+','+(s['R值完成率']*100).toFixed(1)+'%,'+(s['声测率']*100).toFixed(1)+'%,'+(s['D0到课率']*100).toFixed(1)+'%,'+(s['D1到课率']*100).toFixed(1)+'%\n';
+    });
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = '销售数据_' + new Date().toISOString().slice(0,10) + '.csv';
+    link.click();
+  };
 }
 
 // ===== Table =====
