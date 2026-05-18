@@ -199,10 +199,11 @@ document.getElementById('cmpToggle').addEventListener('click', function() {
   document.getElementById('normalFilters').style.display = isCompare ? 'none' : 'flex';
   document.getElementById('compareFilters').style.display = isCompare ? 'block' : 'none';
   if (isCompare && DATA) {
-    ['Date','Team','Seller'].forEach(function(k) {
-      document.getElementById('fDate'+k).value = document.getElementById('fDate').value;
-      document.getElementById('fTeam'+k).value = document.getElementById('fTeam').value;
-      document.getElementById('fSeller'+k).value = document.getElementById('fSeller').value;
+    // Sync A & B group filters from normal mode on first entry
+    ['A','B'].forEach(function(sfx) {
+      document.getElementById('fDate'+sfx).value = document.getElementById('fDate').value;
+      document.getElementById('fTeam'+sfx).value = document.getElementById('fTeam').value;
+      document.getElementById('fSeller'+sfx).value = document.getElementById('fSeller').value;
     });
     buildOptions(); render();
   } else if (DATA) { render(); }
@@ -555,7 +556,7 @@ function bindCompareEvents() {
       var el = document.getElementById('f'+k+sfx);
       if (el) el.onchange = function() {
         if (!DATA) return;
-        if (isCompare) render();
+        if (isCompare) { buildOptions(); render(); }
       };
     });
   });
