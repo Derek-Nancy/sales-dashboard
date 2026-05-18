@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>销售业务数据看板</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  background:linear-gradient(135deg,#eef2f7 0%,#f8f9fc 100%);
+  min-height:100vh;padding:0 16px 40px;
+}
+.header{
+  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);
+  margin:0 -16px;padding:20px 24px 14px;color:#fff;
+  box-shadow:0 4px 20px rgba(0,0,0,0.12);
+}
+.header h1{font-size:24px;font-weight:700;letter-spacing:1px}
+.header .sub{font-size:13px;color:#8899bb;margin-top:4px}
+.hdr-time{float:right;font-size:13px;color:#6688aa;font-family:monospace;margin-top:-22px}
+.cards{display:flex;gap:14px;justify-content:center;margin:18px 0;flex-wrap:wrap}
+.card{
+  background:#fff;border-radius:16px;padding:16px 24px;min-width:180px;
+  text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.06);
+  transition:transform 0.2s,box-shadow 0.2s;position:relative;overflow:hidden;
+}
+.card:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(0,0,0,0.1)}
+.card .num{font-size:28px;font-weight:800;letter-spacing:-0.5px}
+.card .lbl{font-size:13px;color:#888;margin-top:2px}
+.card.gmv .num{color:#e74c3c}.card.assign .num{color:#3498db}.card.r .num{color:#27ae60}
+.filter-bar{
+  display:flex;gap:8px;align-items:center;justify-content:center;
+  flex-wrap:wrap;margin:12px 0 8px;
+}
+.filter-group{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  background:#fff;border-radius:12px;padding:8px 14px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.04);
+}
+.filter-group label{font-size:12px;color:#888;font-weight:600}
+.filter-bar select,.filter-bar button{
+  padding:6px 10px;border:1px solid #e0e0e0;border-radius:8px;
+  font-size:13px;background:#fff;color:#333;outline:none;cursor:pointer;
+  min-width:100px;transition:border-color 0.2s;
+}
+.filter-bar select:focus{border-color:#3498db;box-shadow:0 0 0 2px rgba(52,152,219,0.15)}
+.filter-bar button{background:#f5f7fa;color:#555;border-color:#ddd}
+.filter-bar button:hover{background:#e8ecf2}
+.compare-toggle{background:#fff2b0!important;color:#856404!important;border-color:#ffc107!important;font-weight:600}
+.compare-toggle.active{background:#ffc107!important;color:#333!important}
+.filter-tag{
+  background:#e8f4fd;color:#3498db;padding:5px 12px;border-radius:8px;
+  font-size:12px;display:inline-flex;align-items:center;gap:4px;
+}
+.filter-hint{text-align:center;font-size:12px;color:#999;min-height:18px;margin:0 0 8px}
+.comp-group{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.comp-group .filter-group{background:#fafbfc;box-shadow:0 1px 4px rgba(0,0,0,0.04);padding:6px 10px}
+.comp-group .cmp-a{border-left:3px solid #e74c3c}
+.comp-group .cmp-b{border-left:3px solid #3498db}
+.cmp-label{font-size:11px;font-weight:700;padding:0 4px 4px}
+.cmp-label.a{color:#e74c3c}.cmp-label.b{color:#3498db}
+.sort-bar{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  padding:8px 14px;background:#f7f9fc;border-radius:10px;margin:8px 0;
+}
+.sort-bar label{font-size:12px;color:#888;font-weight:600}
+.sort-bar select{padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff}
+.sort-bar button{padding:4px 12px;border:1px solid #ddd;border-radius:6px;font-size:12px;background:#fff;cursor:pointer}
+.sort-bar button:hover{background:#eef2f7}
+.sort-bar button.s-active{background:#3498db;color:#fff;border-color:#3498db}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:1600px;margin:0 auto}
+.chart-box{
+  background:#fff;border-radius:14px;padding:14px 12px;
+  box-shadow:0 2px 12px rgba(0,0,0,0.05);transition:box-shadow 0.2s;
+}
+.chart-box:hover{box-shadow:0 4px 20px rgba(0,0,0,0.08)}
+.chart-box.full{grid-column:1/-1}
+.chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px}
+.chart-header h3{font-size:13px;color:#333;font-weight:700}
+.chart-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:#e8ecf2;color:#666}
+.tbl-wrap{max-height:550px;overflow-y:auto;font-size:12px;border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{
+  background:#f5f7fa;padding:7px 6px;text-align:left;font-weight:600;
+  color:#444;border-bottom:2px solid #e0e4ea;position:sticky;top:0;
+  white-space:nowrap;font-size:11px;user-select:none;
+}
+td{padding:5px 6px;border-bottom:1px solid #f0f2f6;white-space:nowrap}
+tr:hover{background:#f5f7fc}
+.num-col{text-align:right;font-variant-numeric:tabular-nums}
+.rank{color:#999;font-size:11px;text-align:center;width:28px}
+.green-bg{color:#27ae60!important;font-weight:700}
+.red-bg{color:#e74c3c!important}
+.diff-up{color:#27ae60}.diff-down{color:#e74c3c}
+.loading{text-align:center;padding:60px;color:#999;font-size:14px}
+.empty-state{text-align:center;padding:40px;color:#bbb;font-size:13px}
+.top-btn{padding:3px 10px;font-size:11px;border:1px solid #ddd;border-radius:12px;background:#fff;cursor:pointer}
+.top-btn:hover{background:#eef2f7}
+.top-btn.on{background:#3498db;color:#fff;border-color:#3498db}
+.date-chips{display:inline-flex;gap:6px;flex-wrap:wrap;margin:4px 0}
+.chip-date{
+  display:inline-block;padding:3px 10px;border-radius:14px;font-size:12px;
+  border:1px solid #ddd;background:#fff;cursor:pointer;transition:all 0.15s;
+  color:#555;user-select:none;
+}
+.chip-date:hover{border-color:#3498db;background:#e8f4fd}
+.chip-date.on{
+  background:#3498db;color:#fff;border-color:#3498db;font-weight:600;
+  box-shadow:0 2px 6px rgba(52,152,219,0.3);
+}
+.compare-toggle{background:#fff2b0!important;color:#856404!important;border-color:#ffc107!important;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+.compare-toggle.active{background:#ffc107!important;color:#333!important}
+.cmp-box select{font-size:12px;padding:3px 5px;border:1px solid #ddd;border-radius:5px;background:#fff;min-width:80px}
+.comp-group{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.diff-card{background:#f8f9fc;border-radius:10px;padding:10px 16px;text-align:center;border-left:4px solid #ddd;}
+.diff_card_better{border-left-color:#27ae60}.diff_card_worse{border-left-color:#e74c3c}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+@media(max-width:600px){
+  .filter-bar select,.filter-bar button{min-width:70px;font-size:12px}
+  .card{padding:12px 16px;min-width:120px}
+  .card .num{font-size:22px}
+}
+.card-diff{font-size:11px;margin-top:3px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="header">
+  <span class="hdr-time" id="hdrTime"></span>
+  <h1>📊 销售业务数据看板</h1>
+  <div class="sub">多维度数据透视 · 支持时间对比与排序</div>
+</div>
+<div class="cards">
+  <div class="card assign"><div class="num" id="numAssign">-</div><div class="lbl">📦 总分配数</div><div class="card-diff" id="diffAssign"></div></div>
+  <div class="card gmv"><div class="num" id="numGmv">-</div><div class="lbl">💰 总GMV</div><div class="card-diff" id="diffGmv"></div></div>
+  <div class="card r"><div class="num" id="numR">-</div><div class="lbl">📈 R值 (GMV÷分配数)</div><div class="card-diff" id="diffR"></div></div>
+</div>
+<div class="filter-bar">
+  <button id="cmpToggle" class="compare-toggle">🔁 对比模式</button>
+  <div id="normalFilters" class="filter-group">
+    <label>📊</label><select id="fMonth"><option value="all">全部绩效月</option></select>
+    <label>📅</label><select id="fDate"><option value="all">全部营期</option></select>
+    <label>👥</label><select id="fTeam"><option value="all">全部小组</option></select>
+    <label>🧑</label><select id="fSeller"><option value="all">全部销售</option></select>
+  </div>
+  <button id="resetBtn">⟳ 重置</button>
+  <span class="filter-tag" id="filterTag">所有数据</span>
+</div>
+<!-- Compare mode filters -->
+<div id="compareFilters" style="display:none;">
+  <div class="comp-group">
+    <div class="cmp-box" style="border-left:3px solid #e74c3c;background:#fafbfc;border-radius:8px;padding:8px 10px">
+      <div style="font-size:12px;font-weight:700;color:#e74c3c;margin-bottom:4px">🔴 A组</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <label style="font-size:11px;color:#888">📊</label><select id="fMonthA" class="cmp-sel"><option value="all">全部</option></select>
+        <label style="font-size:11px;color:#888">📅</label><select id="fDateA" class="cmp-sel"><option value="all">全部</option></select>
+        <label style="font-size:11px;color:#888">👥</label><select id="fTeamA" class="cmp-sel"><option value="all">全部</option></select>
+        <label style="font-size:11px;color:#888">🧑</label><select id="fSellerA" class="cmp-sel"><option value="all">全部</option></select>
+      </div>
+    </div>
+    <div class="cmp-box" style="border-left:3px solid #3498db;background:#fafbfc;border-radius:8px;padding:8px 10px">
+      <div style="font-size:12px;font-weight:700;color:#3498db;margin-bottom:4px">🔵 B组</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <label style="font-size:11px;color:#888">📊</label><select id="fMonthB" class="cmp-sel"><option value="all">全部</option></select>
+        <label style="font-size:11px;color:#888">📅</label><select id="fDateB" class="cmp-sel"><option value="all">全部</option></select>
+        <label style="font-size:11px;color:#888">👥</label><select id="fTeamB" class="cmp-sel"><option value="all">全部</option></select>
+        <label style="font-size:11px;color:#888">🧑</label><select id="fSellerB" class="cmp-sel"><option value="all">全部</option></select>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="date-multi" id="dateMultiCtnr" style="text-align:center;margin:6px 0 10px">
+  <span style="font-size:12px;color:#888;margin-right:6px">📅 多期对比（点击切换选中/取消）:</span>
+  <span id="dateChips" class="date-chips"></span>
+  <span class="chip-chip" style="font-size:11px;color:#999;cursor:pointer" id="clearDateChips">✕ 清除</span>
+</div>
+<div class="filter-hint" id="filterHint"></div>
+<div class="grid" id="chartGrid"><div class="loading full">⏳ 加载中...</div></div>
+
+<script>
+// ===== Data Loading =====
+var DATA = null;
+var sellerAgg = [];
+
+function initData(data) {
+  DATA = data;
+  sellerAgg = DATA.sellerAgg;
+  document.querySelector('.loading').textContent = '';
+  buildOptions();
+  render();
+}
+
+// Try loading data.json, fallback to embedded
+(function loadExternalData() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', 'data.json', true);
+  xhr.onload = function() {
+    if (xhr.status === 200) { try { initData(JSON.parse(xhr.responseText)); return; } catch(e) {} }
+    loadInlineData();
+  };
+  xhr.onerror = function() { loadInlineData(); };
+  xhr.send();
+})();
+
+// ===== Time =====
+function updateClock() {
+  var d = new Date();
+  var s = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+  document.getElementById('hdrTime').textContent = '🕐 '+s;
+}
+setInterval(updateClock,1000);updateClock();
+
+// ===== Compare Mode =====
+var isCompare = false;
+document.getElementById('cmpToggle').addEventListener('click', function() {
+  isCompare = !isCompare;
+  this.classList.toggle('active');
+  document.getElementById('normalFilters').style.display = isCompare ? 'none' : 'flex';
+  document.getElementById('compareFilters').style.display = isCompare ? 'block' : 'none';
+  document.getElementById('dateMultiCtnr').style.display = isCompare ? 'none' : 'block';
+  if (isCompare && DATA) {
+    // Sync A/B values from normal filters
+    ['A','B'].forEach(function(sfx) {
+      document.getElementById('fMonth'+sfx).value = document.getElementById('fMonth').value;
+      document.getElementById('fDate'+sfx).value = document.getElementById('fDate').value;
+      document.getElementById('fTeam'+sfx).value = document.getElementById('fTeam').value;
+      document.getElementById('fSeller'+sfx).value = document.getElementById('fSeller').value;
+    });
+    buildCompareOptions(); render();
+  } else if (DATA) { render(); }
+});
+
+function buildCompareOptions() {
+  ['A','B'].forEach(function(sfx) {
+    var selM = document.getElementById('fMonth'+sfx), selD = document.getElementById('fDate'+sfx), selT = document.getElementById('fTeam'+sfx), selS = document.getElementById('fSeller'+sfx);
+    if (!selM) return;
+    var vM = selM.value, vD = selD.value, vT = selT.value, vS = selS.value;
+    selM.innerHTML = '<option value="all">📊 全部</option>';
+    DATA.months.forEach(function(m){selM.innerHTML+='<option value="'+m+'">'+m+'</option>';});
+    selD.innerHTML = '<option value="all">📅 全部</option>';
+    DATA.dates.forEach(function(d){selD.innerHTML+='<option value="'+d+'">'+d.replace('VT','')+'</option>';});
+    selT.innerHTML = '<option value="all">👥 全部</option>';
+    DATA.teams.forEach(function(t){selT.innerHTML+='<option value="'+t+'">'+t+'</option>';});
+    selS.innerHTML = '<option value="all">🧑 全部</option>';
+    DATA.sellers.forEach(function(s){selS.innerHTML+='<option value="'+s+'">'+s+'</option>';});
+    // Restore
+    if (vM!=='all'&&DATA.months.indexOf(vM)>=0) selM.value=vM;
+    if (vD!=='all'&&DATA.dates.indexOf(vD)>=0) selD.value=vD;
+    if (vT!=='all'&&DATA.teams.indexOf(vT)>=0) selT.value=vT;
+    if (vS!=='all'&&DATA.sellers.indexOf(vS)>=0) selS.value=vS;
+  });
+}
+
+function getFilteredCompare(sfx) {
+  return getFiltered(
+    document.getElementById('fMonth'+sfx).value,
+    document.getElementById('fDate'+sfx).value,
+    document.getElementById('fTeam'+sfx).value,
+    document.getElementById('fSeller'+sfx).value
+  );
+}
+
+// Bind compare mode filter changes
+function bindCompareEvents() {
+  ['A','B'].forEach(function(sfx) {
+    ['Month','Date','Team','Seller'].forEach(function(k) {
+      var el = document.getElementById('f'+k+sfx);
+      if (el) el.onchange = function() { if (DATA && isCompare) render(); };
+    });
+  });
+}
+setTimeout(bindCompareEvents, 100);
+
+// ===== Multi-date Select State =====
+var selectedDates = new Set();
+
+// ===== Build Options (bidirectional cascading) =====
+function buildOptions() {
+  if (!DATA) return;
+  buildMonthOptions();
+  buildNormalOptions();
+  updateFilterHint();
+  buildDateChips();
+}
+
+function buildMonthOptions() {
+  var sel = document.getElementById('fMonth');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="all">📊 全部绩效月</option>';
+  DATA.months.forEach(function(m) {
+    sel.innerHTML += '<option value="'+m+'">'+m+'</option>';
+  });
+  if (cur !== 'all' && DATA.months.indexOf(cur) >= 0) sel.value = cur;
+}
+
+function buildNormalOptions() {
+  var selM = document.getElementById('fMonth'), selD = document.getElementById('fDate'), selT = document.getElementById('fTeam'), selS = document.getElementById('fSeller');
+  var selMonth = selM.value, selDate = selD.value, selTeam = selT.value, selSeller = selS.value;
+
+  // Filter sellers/sellerAgg by month first
+  var monthSellers = new Set();
+  sellerAgg.forEach(function(s) {
+    if (selMonth === 'all' || s['大期'].some(function(p){return DATA.dateToMonth[p]===selMonth;})) {
+      monthSellers.add(s['花名']);
+    }
+  });
+
+  var availDates = new Set();
+  if (selSeller !== 'all') {
+    sellerAgg.forEach(function(s){if(s['花名']===selSeller && (selMonth==='all'||s['大期'].some(function(p){return DATA.dateToMonth[p]===selMonth;}))) s['大期'].forEach(function(d){availDates.add(d);});});
+  } else if (selTeam !== 'all') {
+    Object.keys(DATA.dateToTeam).forEach(function(d){
+      if (DATA.dateToTeam[d].indexOf(selTeam) >= 0 && (selMonth === 'all' || DATA.dateToMonth[d] === selMonth)) availDates.add(d);
+    });
+  } else {
+    DATA.dates.forEach(function(d){if (selMonth === 'all' || DATA.dateToMonth[d] === selMonth) availDates.add(d);});
+  }
+  var dateList = Array.from(availDates).sort();
+  selD.innerHTML = '<option value="all">📅 全部营期</option>';
+  dateList.forEach(function(d){selD.innerHTML+='<option value="'+d+'">'+d.replace('VT','')+'</option>';});
+  if(selDate!=='all'&&dateList.indexOf(selDate)>=0)selD.value=selDate;else selD.value='all';
+  selDate=selD.value;
+
+  var availTeams = new Set();
+  if(selSeller!=='all') {
+    sellerAgg.forEach(function(s){if(s['花名']===selSeller && (selMonth==='all'||s['绩效月']===selMonth)) availTeams.add(s['小组']);});
+  } else if(selDate!=='all') {
+    (DATA.dateToTeam[selDate]||[]).forEach(function(t){availTeams.add(t);});
+  } else {
+    DATA.teams.forEach(function(t){availTeams.add(t);});
+  }
+  var teamList = Array.from(availTeams).sort();
+  selT.innerHTML='<option value="all">👥 全部小组</option>';
+  teamList.forEach(function(t){selT.innerHTML+='<option value="'+t+'">'+t+'</option>';});
+  if(selTeam!=='all'&&teamList.indexOf(selTeam)>=0)selT.value=selTeam;else selT.value='all';
+  selTeam=selT.value;
+
+  var availSellers = new Set();
+  if(selDate==='all'&&selTeam==='all') {
+    monthSellers.forEach(function(s){availSellers.add(s);});
+  } else if(selDate!=='all'&&selTeam==='all') {
+    (DATA.dateToSeller[selDate]||[]).forEach(function(s){if(monthSellers.has(s))availSellers.add(s);});
+  } else if(selDate==='all'&&selTeam!=='all') {
+    (DATA.teamToSeller[selTeam]||[]).forEach(function(s){if(monthSellers.has(s))availSellers.add(s);});
+  } else {
+    var bD=new Set(DATA.dateToSeller[selDate]||[]);var bT=new Set(DATA.teamToSeller[selTeam]||[]);
+    bD.forEach(function(s){if(bT.has(s)&&monthSellers.has(s))availSellers.add(s);});
+  }
+  var sellerList = Array.from(availSellers).sort();
+  selS.innerHTML='<option value="all">🧑 全部销售</option>';
+  sellerList.forEach(function(s){selS.innerHTML+='<option value="'+s+'">'+s+'</option>';});
+  if(selSeller!=='all'&&sellerList.indexOf(selSeller)>=0)selS.value=selSeller;else selS.value='all';
+}
+
+function buildCompareOptions() {
+  ['A','B'].forEach(function(sfx) {
+    var selD=document.getElementById('fDate'+sfx), selT=document.getElementById('fTeam'+sfx), selS=document.getElementById('fSeller'+sfx);
+    if(!selD)return;
+    // Save current values before rebuild
+    var svD = selD.value, svT = selT.value, svS = selS.value;
+    selD.innerHTML='<option value="all">📅 全部营期</option>';
+    DATA.dates.forEach(function(d){selD.innerHTML+='<option value="'+d+'">'+d.replace('VT','')+'</option>';});
+    selT.innerHTML='<option value="all">👥 全部小组</option>';
+    DATA.teams.forEach(function(t){selT.innerHTML+='<option value="'+t+'">'+t+'</option>';});
+    selS.innerHTML='<option value="all">🧑 全部销售</option>';
+    DATA.sellers.forEach(function(s){selS.innerHTML+='<option value="'+s+'">'+s+'</option>';});
+    // Restore
+    if (svD && svD !== 'all' && Array.from(selD.options).some(function(o){return o.value===svD;})) selD.value = svD;
+    if (svT && svT !== 'all' && Array.from(selT.options).some(function(o){return o.value===svT;})) selT.value = svT;
+    if (svS && svS !== 'all' && Array.from(selS.options).some(function(o){return o.value===svS;})) selS.value = svS;
+  });
+}
+
+function updateFilterHint() {
+  var m=document.getElementById('fMonth').value,d=document.getElementById('fDate').value,t=document.getElementById('fTeam').value,s=document.getElementById('fSeller').value;
+  var parts=[];
+  if(m!=='all')parts.push('绩效月:'+m);
+  if(d!=='all')parts.push('营期:'+d.replace('VT',''));
+  if(t!=='all')parts.push('小组:'+t);
+  if(s!=='all')parts.push('销售:'+s);
+  var chips = Array.from(selectedDates);
+  if (chips.length > 0) parts.push('多期对比: '+chips.map(function(x){return x.replace('VT','');}).join(','));
+  document.getElementById('filterHint').textContent=parts.length>0?'当前筛选: '+parts.join(' · ')+(s==='all'?' ('+document.getElementById('fSeller').options.length+'位销售)':''):'';
+  var tag = s!=='all'?s:(t!=='all'?t:(d!=='all'?d.replace('VT',''):(m!=='all'?m:(chips.length>0?'多期对比':'所有数据'))));
+  document.getElementById('filterTag').textContent=tag;
+}
+
+// ===== Date Chips (multi-select) =====
+function buildDateChips() {
+  var ctnr = document.getElementById('dateChips');
+  if (!DATA || !ctnr) return;
+  ctnr.innerHTML = '';
+  var selMonth = document.getElementById('fMonth').value;
+  var dates = DATA.dates.filter(function(d) { return selMonth === 'all' || DATA.dateToMonth[d] === selMonth; });
+  dates.forEach(function(d) {
+    var label = d.replace('VT','');
+    var chip = document.createElement('span');
+    chip.className = 'chip-date' + (selectedDates.has(d) ? ' on' : '');
+    chip.textContent = label;
+    chip.onclick = function() {
+      if (selectedDates.has(d)) selectedDates.delete(d);
+      else selectedDates.add(d);
+      buildDateChips();
+      render();
+    };
+    ctnr.appendChild(chip);
+  });
+}
+document.getElementById('clearDateChips').addEventListener('click', function() {
+  selectedDates.clear();
+  buildDateChips();
+  render();
+});
+
+// ===== Filter =====
+function getFiltered(mv,dv,tv,sv) {
+  var m=mv||document.getElementById('fMonth').value, d=dv||document.getElementById('fDate').value, t=tv||document.getElementById('fTeam').value, s=sv||document.getElementById('fSeller').value;
+  var list=sellerAgg.slice();
+  if(m!=='all')list=list.filter(function(x){return x['大期'].some(function(p){return DATA.dateToMonth[p]===m;});});
+  if(d!=='all')list=list.filter(function(x){return x['大期'].indexOf(d)>=0;});
+  if(t!=='all')list=list.filter(function(x){return x['小组']===t;});
+  if(s!=='all')list=list.filter(function(x){return x['花名']===s;});
+  var aT=list.reduce(function(a,x){return a+x['分配数'];},0);
+  var gT=list.reduce(function(a,x){return a+x['GMV '];},0);
+  var rV=aT>0?(gT/aT).toFixed(2):'0.00';
+  return {list:list,assignTotal:aT,gmvTotal:gT,rVal:rV};
+}
+
+// ===== Sort State =====
+var sortField = 'GMV ';
+var sortDesc = true;
+var topN = 0;
+
+// ===== Render =====
+function render() {
+  if(!DATA)return;
+  var grid=document.getElementById('chartGrid');grid.innerHTML='';
+  if (isCompare) { renderCompare(grid); } else { renderNormal(grid); }
+}
+
+function renderNormal(grid) {
+  var filter = getFiltered();
+  document.getElementById('numAssign').textContent=filter.assignTotal.toLocaleString();
+  document.getElementById('numGmv').textContent='¥'+filter.gmvTotal.toLocaleString();
+  document.getElementById('numR').textContent=filter.rVal;
+
+  // Calculate MoM (period-over-period) change
+  function calcMoM(fn) {
+    var dates = DATA.dates.filter(function(d){return document.getElementById('fMonth').value==='all'||DATA.dateToMonth[d]===document.getElementById('fMonth').value;}).sort();
+    if (dates.length < 2) { document.getElementById('diff'+fn).textContent=''; return; }
+    var lastDate = dates[dates.length-1], prevDate = dates[dates.length-2];
+    var allList = sellerAgg.slice();
+    var m = document.getElementById('fMonth').value, t = document.getElementById('fTeam').value, s = document.getElementById('fSeller').value;
+    if(m!=='all')allList=allList.filter(function(x){return x['绩效月']===m;});
+    if(t!=='all')allList=allList.filter(function(x){return x['小组']===t;});
+    if(s!=='all')allList=allList.filter(function(x){return x['花名']===s;});
+    var last = allList.filter(function(x){return x['大期'].indexOf(lastDate)>=0;});
+    var prev = allList.filter(function(x){return x['大期'].indexOf(prevDate)>=0;});
+    var lA=last.reduce(function(a,x){return a+x['分配数'];},0), pA=prev.reduce(function(a,x){return a+x['分配数'];},0);
+    var lG=last.reduce(function(a,x){return a+x['GMV '];},0), pG=prev.reduce(function(a,x){return a+x['GMV '];},0);
+    var lR=lA>0?lG/lA:0, pR=pA>0?pG/pA:0;
+    var val, pVal, label;
+    if (fn==='Assign') { val=lA; pVal=pA; label='分配数'; }
+    else if (fn==='Gmv') { val=lG; pVal=pG; label='GMV'; }
+    else { val=lR; pVal=pR; label='R值'; }
+    var diff = pVal>0 ? ((val-pVal)/pVal*100) : 0;
+    var arrow = diff>0?'▲':'▼';
+    var color = diff>=0?'#27ae60':'#e74c3c';
+    var el = document.getElementById('diff'+fn);
+    if (pVal===0) { el.textContent=''; return; }
+    el.innerHTML = '较上期 <span style="color:'+color+'">'+arrow+Math.abs(diff).toFixed(1)+'%</span>';
+    el.title = label+' 上期:'+pVal.toLocaleString()+' 本期:'+val.toLocaleString();
+  }
+  calcMoM('Assign'); calcMoM('Gmv'); calcMoM('R');
+
+  // Get multi-date filter for contrast
+  var mc = Array.from(selectedDates);
+  var multiCompare = mc.length > 1;
+
+  addChart(grid,'📅 营期趋势：GMV & R值' + (multiCompare ? ' (多期对比)' : ''),'full',function(div){
+    if (multiCompare) {
+      // Multi-date mode: show grouped bars for selected dates
+      var palettes = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#34495e'];
+      var traces = [];
+      mc.forEach(function(date, i) {
+        var sub = filter.list.filter(function(x){return x['大期'].indexOf(date)>=0;});
+        var g = sub.reduce(function(a,x){return a+x['GMV '];},0);
+        var a = sub.reduce(function(a,x){return a+x['分配数'];},0);
+        var clr = palettes[i % palettes.length];
+        traces.push({
+          x: [date.replace('VT','')], y: [g],
+          type:'bar', name:'GMV_'+date.replace('VT',''),
+          marker:{color:clr,opacity:0.8},
+          hovertemplate:'%{x}<br>GMV: ¥%{y:,}<extra></extra>', yaxis:'y'
+        });
+        traces.push({
+          x: [date.replace('VT','')], y: [a>0?g/a:0],
+          type:'scatter', mode:'markers',
+          name:'R值_'+date.replace('VT',''),
+          marker:{color:clr,size:12,symbol:'diamond'},
+          hovertemplate:'%{x}<br>R值: ¥%{y:.2f}<extra></extra>', yaxis:'y2'
+        });
+      });
+      Plotly.newPlot(div, traces, {
+        margin:{t:8,r:60,b:35,l:55},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
+        xaxis:{tickangle:-35},yaxis:{tickformat:','},
+        yaxis2:{overlaying:'y',side:'right',tickprefix:'¥',title:{text:'R值'}},
+        legend:{orientation:'h',y:1.08,x:0},barmode:'group',hovermode:'x unified'
+      },{responsive:true});
+    } else {
+      // Single mode - original chart with moving average
+      var agg={};filter.list.forEach(function(x){x['大期'].forEach(function(d){if(!agg[d])agg[d]={g:0,a:0};agg[d].g+=x['GMV '];agg[d].a+=x['分配数'];});});
+      var keys=Object.keys(agg).sort();
+      if(!keys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+      var gmvVals=keys.map(function(k){return agg[k].g;});
+      var maVals=gmvVals.map(function(v,i){
+        if(i<2)return null;
+        return (gmvVals[i-2]+gmvVals[i-1]+gmvVals[i])/3;
+      });
+      Plotly.newPlot(div,[
+        {x:keys,y:gmvVals,type:'bar',name:'GMV',marker:{color:'#e74c3c',opacity:0.8},hovertemplate:'%{x}<br>GMV: ¥%{y:,}<extra></extra>',yaxis:'y'},
+        {x:keys,y:maVals,type:'scatter',mode:'lines',name:'3期移动均线',line:{color:'#e74c3c',width:2,dash:'dot'},connectgaps:false,yaxis:'y'},
+        {x:keys,y:keys.map(function(k){return agg[k].a>0?agg[k].g/agg[k].a:0;}),type:'scatter',mode:'lines+markers',name:'R值(元/人)',line:{color:'#27ae60',width:3},marker:{size:9,symbol:'diamond'},yaxis:'y2'}
+      ],{margin:{t:8,r:60,b:35,l:55},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:','},yaxis2:{overlaying:'y',side:'right',tickprefix:'¥',title:{text:'R值'}},legend:{orientation:'h',y:1.08,x:0.1},hovermode:'x unified'},{responsive:true});
+    }
+  });
+
+  addChart(grid,'🏆 小组GMV排行',1,function(div){
+    var agg={};filter.list.forEach(function(x){var t=x['小组'];if(!agg[t])agg[t]={g:0};agg[t].g+=x['GMV '];});
+    var names=Object.keys(agg).sort(function(a,b){return agg[b].g-agg[a].g;});
+    if(!names.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    var clrs=['#FF6B6B','#F39C12','#3498DB','#2ECC71','#9B59B6'];
+    Plotly.newPlot(div,[{x:names.map(function(n){return agg[n].g;}),y:names,type:'bar',orientation:'h',marker:{color:clrs.slice(0,names.length)},textposition:'outside'}],{margin:{t:5,r:80,b:20,l:65},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickformat:','},yaxis:{autorange:'reversed'}},{responsive:true});
+  });
+
+  addChart(grid,'📞 声测率趋势',1,function(div){
+    var agg={};filter.list.forEach(function(x){x['大期'].forEach(function(d){if(!agg[d])agg[d]={s:0,c:0};agg[d].s+=x['声测率'];agg[d].c+=1;});});
+    var keys=Object.keys(agg).sort();
+    if(!keys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    Plotly.newPlot(div,[
+      {x:keys,y:keys.map(function(k){return agg[k].s/agg[k].c;}),type:'scatter',mode:'lines+markers',name:'声测率',line:{color:'#e74c3c',width:3},marker:{size:8}},
+      {x:keys,y:keys.map(function(){return 0.4;}),type:'scatter',mode:'lines',line:{color:'#e74c3c',width:1,dash:'dash'},name:'⚠️40%警戒线'}
+    ],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:'.0%'}},{responsive:true});
+  });
+
+  addChart(grid,'📖 D0-D1到课率趋势',1,function(div){
+    var agg={};filter.list.forEach(function(x){x['大期'].forEach(function(d){if(!agg[d])agg[d]={d0:0,d1:0,c:0};agg[d].d0+=x['D0到课率'];agg[d].d1+=x['D1到课率'];agg[d].c+=1;});});
+    var keys=Object.keys(agg).sort();
+    if(!keys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    Plotly.newPlot(div,[
+      {x:keys,y:keys.map(function(k){return agg[k].d0/agg[k].c;}),type:'scatter',mode:'lines+markers',name:'D0到课率',line:{color:'#3498DB',width:2.5},marker:{size:7}},
+      {x:keys,y:keys.map(function(k){return agg[k].d1/agg[k].c;}),type:'scatter',mode:'lines+markers',name:'D1到课率',line:{color:'#2ECC71',width:2.5},marker:{size:7}}
+    ],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:'.0%'}},{responsive:true});
+  });
+
+  // Funnel chart
+  addChart(grid,'🔽 转化漏斗','full',function(div){
+    var totalAssign = filter.list.reduce(function(a,x){return a+x['分配数'];},0);
+    var totalShengCe = filter.list.reduce(function(a,x){return a+Math.round(x['分配数']*x['声测率']);},0);
+    var totalD0 = filter.list.reduce(function(a,x){return a+Math.round(x['分配数']*x['D0到课率']);},0);
+    var totalD1 = filter.list.reduce(function(a,x){return a+Math.round(x['分配数']*x['D1到课率']);},0);
+    if (totalAssign === 0) { div.innerHTML = '<div class=\"empty-state\">暂无数据</div>'; return; }
+    var scRate = totalAssign>0?((totalShengCe/totalAssign)*100).toFixed(1):'0';
+    var d0Rate = totalShengCe>0?((totalD0/totalShengCe)*100).toFixed(1):'0';
+    var d1Rate = totalD0>0?((totalD1/totalD0)*100).toFixed(1):'0';
+    Plotly.newPlot(div,[{
+      type:'funnel',
+      y:['📦 分配数','📞 声测('+scRate+'%)','📖 D0到课('+d0Rate+'%)','✅ D1到课('+d1Rate+'%)'],
+      x:[totalAssign,totalShengCe,totalD0,totalD1],
+      textinfo:'value+percent previous',
+      textfont:{size:13},
+      marker:{color:['#3498db','#f39c12','#e74c3c','#2ecc71']}
+    }],{margin:{t:8,r:80,b:20,l:100},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)'},{responsive:true});
+  });
+
+  // Seller ranking
+  var sList = getSortedList(filter);
+  addChart(grid,'🏅 销售排行 TOP'+Math.min(sList.length,15),'full',function(div){
+    var top=sList.slice(0,15);
+    if(!top.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    var clrs={'奇文组':'#e74c3c','奇怡组':'#f39c12','奇飞组':'#3498db','奇豪组':'#2ecc71','奇可组':'#9b59b6'};
+    var names=top.map(function(s,i){var m=['🥇','🥈','🥉'];return (i<3?m[i]+' ':'')+s['花名'];});
+    Plotly.newPlot(div,[{x:top.map(function(s){return s['GMV '];}),y:names,type:'bar',orientation:'h',marker:{color:top.map(function(s){return clrs[s['小组']]||'#999';})},textposition:'outside'}],{margin:{t:5,r:110,b:20,l:80},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickformat:','},yaxis:{autorange:'reversed'},height:Math.max(300,top.length*34+50)},{responsive:true});
+  });
+
+  // Detail Table
+  addChart(grid,'📋 个人明细'+(topN>0?' TOP'+topN:''),'full',function(div){
+    var items = getSortedList(filter);
+    div.innerHTML = buildSortBarUI() + buildTable(items);
+    setTimeout(function(){bindSortEvents();},30);
+  });
+
+  // Alert block: low performers
+  addChart(grid,'⚠️ 需关注销售','full',function(div){
+    var lowR = filter.list.filter(function(x){return x['R值(元/人)'] < 60;});
+    var lowSC = filter.list.filter(function(x){return (x['声测率']*100) < 40;});
+    var lowD0 = filter.list.filter(function(x){return (x['D0到课率']*100) < 30;});
+    var lowD1 = filter.list.filter(function(x){return (x['D1到课率']*100) < 30;});
+    var bothLow = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['声测率']*100) < 40;});
+    var rD0 = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['D0到课率']*100) < 30;});
+    var rD1 = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['D1到课率']*100) < 30;});
+    var allEmpty = lowR.length+lowSC.length+lowD0.length+lowD1.length===0;
+    if (allEmpty) {
+      div.innerHTML = '<div style="color:#27ae60;text-align:center;padding:20px;font-size:14px">✅ 当前筛选范围内无需要关注的销售</div>';
+      return;
+    }
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+    // 低R值
+    html += '<div style="background:#fff5f5;border-radius:10px;padding:8px;border:1px solid #fcc"><div style="font-size:11px;color:#e74c3c;font-weight:700">🔴 低R值 (<60)</div><div style="margin-top:4px">';
+    lowR.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#fde8e8;border-radius:8px;font-size:10px;color:#c0392b">'+s['花名']+' ¥'+s['R值(元/人)']+'</span>';});
+    if(lowR.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // 低声测率
+    html += '<div style="background:#fffef5;border-radius:10px;padding:8px;border:1px solid #ffddaa"><div style="font-size:11px;color:#e67e22;font-weight:700">🟡 低声测率 (<40%)</div><div style="margin-top:4px">';
+    lowSC.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#fef7e0;border-radius:8px;font-size:10px;color:#d35400">'+s['花名']+' '+(s['声测率']*100).toFixed(1)+'%</span>';});
+    if(lowSC.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // 低D0到课率
+    html += '<div style="background:#f0f4ff;border-radius:10px;padding:8px;border:1px solid #cce"><div style="font-size:11px;color:#2980b9;font-weight:700">🔵 低D0到课率 (<30%)</div><div style="margin-top:4px">';
+    lowD0.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#dbeafe;border-radius:8px;font-size:10px;color:#1565c0">'+s['花名']+' '+(s['D0到课率']*100).toFixed(1)+'%</span>';});
+    if(lowD0.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // 低D1到课率
+    html += '<div style="background:#faf0ff;border-radius:10px;padding:8px;border:1px solid #ecd"><div style="font-size:11px;color:#8e44ad;font-weight:700">🟣 低D1到课率 (<30%)</div><div style="margin-top:4px">';
+    lowD1.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#f3e5f5;border-radius:8px;font-size:10px;color:#6a1b9a">'+s['花名']+' '+(s['D1到课率']*100).toFixed(1)+'%</span>';});
+    if(lowD1.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // R值+声测双重
+    html += '<div style="background:#fff0f0;border-radius:10px;padding:8px;border:1px solid #faa"><div style="font-size:11px;color:#c0392b;font-weight:700">🔴 R<60 + 声测<40%</div><div style="margin-top:4px">';
+    bothLow.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#fdd;border-radius:8px;font-size:10px;color:#c0392b;font-weight:700">'+s['花名']+'</span>';});
+    if(bothLow.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // R值+D0双重
+    html += '<div style="background:#eef0ff;border-radius:10px;padding:8px;border:1px solid #aac"><div style="font-size:11px;color:#283593;font-weight:700">🔴 R<60 + D0<30%</div><div style="margin-top:4px">';
+    rD0.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#dde4ff;border-radius:8px;font-size:10px;color:#283593;font-weight:700">'+s['花名']+'</span>';});
+    if(rD0.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // R值+D1双重
+    html += '<div style="background:#f0ebff;border-radius:10px;padding:8px;border:1px solid #cca"><div style="font-size:11px;color:#4a148c;font-weight:700">🔴 R<60 + D1<30%</div><div style="margin-top:4px">';
+    rD1.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#ede7f6;border-radius:8px;font-size:10px;color:#4a148c;font-weight:700">'+s['花名']+'</span>';});
+    if(rD1.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    html += '</div>';
+    div.innerHTML = html;
+  });
+
+  // PIP统计：每个营期R值低于该营期平均值的人
+  addChart(grid,'📊 PIP统计（各营期低于平均R值的人员）','full',function(div){
+    var periodAvg = getPeriodAvgR(filter);
+    var periodKeys = Object.keys(periodAvg).sort();
+    if (periodKeys.length === 0) { div.innerHTML = '<div class="empty-state">暂无数据</div>'; return; }
+    var html = '';
+    periodKeys.forEach(function(p){
+      var avgR = periodAvg[p];
+      // Find sellers whose R value is below this period's average
+      var belowAvg = filter.list.filter(function(x){
+        return x['大期'].indexOf(p) >= 0 && x['R值(元/人)'] < avgR;
+      });
+      if (belowAvg.length === 0) return;
+      var pLabel = p.replace('VT','');
+      html += '<div style="margin-bottom:8px;border:1px solid #eee;border-radius:8px;padding:8px 10px;background:#fafbfc">'
+        + '<div style="font-size:12px;font-weight:700;color:#e74c3c">📅 '+pLabel+'</div>'
+        + '<div style="font-size:11px;color:#666;margin:2px 0 4px">营期平均R值: ¥<b>'+avgR.toFixed(2)+'</b> ｜ 低于平均值: <b>'+belowAvg.length+'人</b></div>';
+      belowAvg.sort(function(a,b){return (a['R值(元/人)']||0) - (b['R值(元/人)']||0);});
+      belowAvg.forEach(function(s){
+        var rVal = s['R值(元/人)']||0;
+        var diff = avgR - rVal;
+        html += '<span style="display:inline-block;padding:1px 7px;margin:1px;background:#fef0f0;border-radius:8px;font-size:10px;color:#c0392b;border:1px solid #fcc">'
+          + s['花名']+' ¥'+rVal.toFixed(2)+' <span style="color:#999">(低¥'+diff.toFixed(2)+')</span></span>';
+      });
+      html += '</div>';
+    });
+    if (!html) { div.innerHTML = '<div style="color:#27ae60;text-align:center;padding:12px">✅ 当前范围内无低于营期平均R值的销售</div>'; return; }
+    div.innerHTML = html;
+  });
+}
+
+function getPeriodAvgR(filter) {
+  var periodMap = {};
+  filter.list.forEach(function(x){
+    x['大期'].forEach(function(d){
+      if (!periodMap[d]) periodMap[d] = {totalG:0, totalA:0};
+      periodMap[d].totalG += x['GMV '];
+      periodMap[d].totalA += x['分配数'];
+    });
+  });
+  var result = {};
+  Object.keys(periodMap).forEach(function(d){
+    var o = periodMap[d];
+    result[d] = o.totalA > 0 ? (o.totalG / o.totalA) : 0;
+  });
+  return result;
+}
+
+// ===== Sort UI =====
+function buildSortBarUI() {
+  var fields=[['GMV ','GMV'],['分配数','分配数'],['R值(元/人)','R值'],['声测率','声测率'],['D0到课率','D0到课率'],['D1到课率','D1到课率'],['R值完成率','R值完成率']];
+  var opts=fields.map(function(f){return '<option value="'+f[0]+'"'+(sortField===f[0]?' selected':'')+'>'+f[1]+'</option>';}).join('');
+  return '<div class="sort-bar"><label>🔽 按:</label><select id="sortField">'+opts+'</select><button id="sortDirBtn">'+'▼ '+'</button><span style="color:#ccc;margin:0 4px">|</span><button class="top-btn'+(topN===0?' on':'')+'" data-n="0">全部</button><button class="top-btn'+(topN===10?' on':'')+'" data-n="10">前10</button><button class="top-btn'+(topN===20?' on':'')+'" data-n="20">前20</button><span style="color:#ccc;margin:0 4px">|</span><button id="exportCsvBtn" style="padding:4px 10px;border:1px solid #27ae60;border-radius:6px;font-size:11px;background:#e8f8e8;color:#27ae60;cursor:pointer;font-weight:600">📥 导出CSV</button></div>';
+}
+
+function bindSortEvents() {
+  var sf=document.getElementById('sortField');
+  if(sf)sf.onchange=function(){sortField=this.value;render();};
+  var dir=document.getElementById('sortDirBtn');
+  if(dir)dir.onclick=function(){sortDesc=!sortDesc;dir.textContent=sortDesc?'▼ ':'▲ ';render();};
+  document.querySelectorAll('.top-btn').forEach(function(b){b.onclick=function(){topN=parseInt(this.getAttribute('data-n'));render();};});
+  var csvBtn = document.getElementById('exportCsvBtn');
+  if (csvBtn) csvBtn.onclick = function() {
+    var filter = getFiltered();
+    var list = getSortedList(filter);
+    var csv = '\uFEFF花名,小组,参与期数,分配数,GMV,R值,R值完成率,声测率,D0到课率,D1到课率\n';
+    list.forEach(function(s){
+      var r=s['GMV ']>0&&s['分配数']>0?(s['GMV ']/s['分配数']).toFixed(2):'-';
+      csv += s['花名']+','+s['小组']+','+s['参与期数']+'期/'+s['次数']+'次,'+s['分配数']+','+s['GMV ']+','+r+','+(s['R值完成率']*100).toFixed(1)+'%,'+(s['声测率']*100).toFixed(1)+'%,'+(s['D0到课率']*100).toFixed(1)+'%,'+(s['D1到课率']*100).toFixed(1)+'%\n';
+    });
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = '销售数据_' + new Date().toISOString().slice(0,10) + '.csv';
+    link.click();
+  };
+}
+
+// ===== Table =====
+function buildTable(list) {
+  var h='<tr><th style="text-align:center">#</th><th>花名</th><th>小组</th><th>参与</th><th class="num-col">分配数</th><th class="num-col">GMV</th><th class="num-col">R值</th><th class="num-col">R值完成率</th><th class="num-col">声测率</th><th class="num-col">D0到课率</th><th class="num-col">D1到课率</th></tr>';
+  var m=['🥇','🥈','🥉'];
+  list.forEach(function(s,i){
+    var r=s['GMV ']>0&&s['分配数']>0?(s['GMV ']/s['分配数']).toFixed(2):'-';
+    var rp=(s['R值完成率']*100).toFixed(1);
+    var rc=parseFloat(rp)>=100?'green-bg':(parseFloat(rp)<80?'red-bg':'');
+    h+='<tr><td class="rank">'+(i<3?m[i]:i+1)+'</td>'
+      +'<td><b>'+s['花名']+'</b></td>'
+      +'<td>'+s['小组']+'</td>'
+      +'<td>'+s['参与期数']+'期/'+s['次数']+'次</td>'
+      +'<td class="num-col">'+s['分配数'].toLocaleString()+'</td>'
+      +'<td class="num-col">¥'+s['GMV '].toLocaleString()+'</td>'
+      +'<td class="num-col">¥'+r+'</td>'
+      +'<td class="num-col '+rc+'">'+rp+'%</td>'
+      +'<td class="num-col">'+(s['声测率']*100).toFixed(1)+'%</td>'
+      +'<td class="num-col">'+(s['D0到课率']*100).toFixed(1)+'%</td>'
+      +'<td class="num-col">'+(s['D1到课率']*100).toFixed(1)+'%</td></tr>';
+  });
+  return '<div class="tbl-wrap"><table>'+h+'</table></div>';
+}
+
+// ===== Compare Mode Render =====
+function renderCompare(grid) {
+  var fA = getFilteredCompare('A'), fB = getFilteredCompare('B');
+  var da=fA.assignTotal, db=fB.assignTotal, ga=fA.gmvTotal, gb=fB.gmvTotal;
+  var ra=parseFloat(fA.rVal)||0, rb=parseFloat(fB.rVal)||0;
+  var aDiff=db>0?(((da-db)/db)*100).toFixed(1):'∞';
+  var gDiff=gb>0?(((ga-gb)/gb)*100).toFixed(1):'∞';
+  var rDiff=rb>0?(((ra-rb)/rb)*100).toFixed(1):'∞';
+  var arrow=function(v){return parseFloat(v)>0?'<span style="color:#27ae60">▲'+v+'%</span>':(parseFloat(v)<0?'<span style="color:#e74c3c">▼'+Math.abs(parseFloat(v))+'%</span>':'<span style="color:#999">-</span>');};
+  var diffCard='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">'
+    +'<div class="diff-card" style="border-left-color:#e74c3c"><div style="font-size:11px;color:#888">📦 分配数</div><div style="font-size:16px;font-weight:700">A:'+da.toLocaleString()+'<br>B:'+db.toLocaleString()+'</div><div style="font-size:13px;margin-top:3px">'+arrow(aDiff)+'</div></div>'
+    +'<div class="diff-card" style="border-left-color:#3498db"><div style="font-size:11px;color:#888">💰 GMV</div><div style="font-size:16px;font-weight:700;color:#e74c3c">A:¥'+ga.toLocaleString()+'<br><span style="color:#333">B:¥'+gb.toLocaleString()+'</span></div><div style="font-size:13px;margin-top:3px">'+arrow(gDiff)+'</div></div>'
+    +'<div class="diff-card" style="border-left-color:#27ae60"><div style="font-size:11px;color:#888">📈 R值</div><div style="font-size:16px;font-weight:700;color:#27ae60">A:'+ra+'<br><span style="color:#333">B:'+rb+'</span></div><div style="font-size:13px;margin-top:3px">'+arrow(rDiff)+'</div></div></div>';
+  var c=document.createElement('div');c.className='chart-box full';
+  c.innerHTML='<div class="chart-header"><h3>🔁 对比概览</h3></div>'+diffCard;grid.appendChild(c);
+
+  addChart(grid,'💰 GMV对比 (红=A 蓝=B)','full',function(div){
+    var aggA={},aggB={};fA.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggA[d])aggA[d]={g:0};aggA[d].g+=x['GMV '];});});
+    fB.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggB[d])aggB[d]={g:0};aggB[d].g+=x['GMV '];});});
+    var allKeys=Array.from(new Set(Object.keys(aggA).concat(Object.keys(aggB)))).sort();
+    if(!allKeys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    Plotly.newPlot(div,[{x:allKeys,y:allKeys.map(function(k){return(aggA[k]||{g:0}).g;}),type:'bar',name:'A组 GMV',marker:{color:'#e74c3c',opacity:0.8}},{x:allKeys,y:allKeys.map(function(k){return(aggB[k]||{g:0}).g;}),type:'bar',name:'B组 GMV',marker:{color:'#3498db',opacity:0.8}}],{margin:{t:8,r:15,b:35,l:55},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:','},barmode:'group',legend:{orientation:'h',y:1.08,x:0.3}},{responsive:true});
+  });
+  addChart(grid,'📈 R值对比 (红=A 蓝=B)','full',function(div){
+    var aggA={},aggB={};fA.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggA[d])aggA[d]={g:0,a:0};aggA[d].g+=x['GMV '];aggA[d].a+=x['分配数'];});});
+    fB.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggB[d])aggB[d]={g:0,a:0};aggB[d].g+=x['GMV '];aggB[d].a+=x['分配数'];});});
+    var allKeys=Array.from(new Set(Object.keys(aggA).concat(Object.keys(aggB)))).sort();
+    if(!allKeys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    Plotly.newPlot(div,[{x:allKeys,y:allKeys.map(function(k){var o=aggA[k];return o&&o.a>0?o.g/o.a:0;}),type:'scatter',mode:'lines+markers',name:'A组 R值',line:{color:'#e74c3c',width:2.5},marker:{size:8}},{x:allKeys,y:allKeys.map(function(k){var o=aggB[k];return o&&o.a>0?o.g/o.a:0;}),type:'scatter',mode:'lines+markers',name:'B组 R值',line:{color:'#3498db',width:2.5},marker:{size:8}}],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickprefix:'¥'},legend:{orientation:'h',y:1.08,x:0.3}},{responsive:true});
+  });
+  addChart(grid,'📞 声测率对比','full',function(div){
+    var aggA={},aggB={};fA.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggA[d])aggA[d]={s:0,c:0};aggA[d].s+=x['声测率'];aggA[d].c+=1;});});
+    fB.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggB[d])aggB[d]={s:0,c:0};aggB[d].s+=x['声测率'];aggB[d].c+=1;});});
+    var allKeys=Array.from(new Set(Object.keys(aggA).concat(Object.keys(aggB)))).sort();
+    if(!allKeys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    Plotly.newPlot(div,[{x:allKeys,y:allKeys.map(function(k){return aggA[k]?aggA[k].s/aggA[k].c:0;}),type:'scatter',mode:'lines+markers',name:'A组 声测率',line:{color:'#e74c3c',width:2.5},marker:{size:8}},{x:allKeys,y:allKeys.map(function(k){return aggB[k]?aggB[k].s/aggB[k].c:0;}),type:'scatter',mode:'lines+markers',name:'B组 声测率',line:{color:'#3498db',width:2.5},marker:{size:8}}],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:'.0%'},legend:{orientation:'h',y:1.08,x:0.3}},{responsive:true});
+  });
+  addChart(grid,'📖 D0-D1到课率对比','full',function(div){
+    var aggA={},aggB={};fA.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggA[d])aggA[d]={d0:0,d1:0,c:0};aggA[d].d0+=x['D0到课率'];aggA[d].d1+=x['D1到课率'];aggA[d].c+=1;});});
+    fB.list.forEach(function(x){x['大期'].forEach(function(d){if(!aggB[d])aggB[d]={d0:0,d1:0,c:0};aggB[d].d0+=x['D0到课率'];aggB[d].d1+=x['D1到课率'];aggB[d].c+=1;});});
+    var allKeys=Array.from(new Set(Object.keys(aggA).concat(Object.keys(aggB)))).sort();
+    if(!allKeys.length){div.innerHTML='<div class="empty-state">暂无数据</div>';return;}
+    Plotly.newPlot(div,[{x:allKeys,y:allKeys.map(function(k){return aggA[k]?aggA[k].d0/aggA[k].c:0;}),type:'scatter',mode:'lines+markers',name:'A组 D0',line:{color:'#e74c3c',width:2,dash:'dash'},marker:{size:7,symbol:'square'}},{x:allKeys,y:allKeys.map(function(k){return aggA[k]?aggA[k].d1/aggA[k].c:0;}),type:'scatter',mode:'lines+markers',name:'A组 D1',line:{color:'#e74c3c',width:2},marker:{size:7}},{x:allKeys,y:allKeys.map(function(k){return aggB[k]?aggB[k].d0/aggB[k].c:0;}),type:'scatter',mode:'lines+markers',name:'B组 D0',line:{color:'#3498db',width:2,dash:'dash'},marker:{size:7,symbol:'square'}},{x:allKeys,y:allKeys.map(function(k){return aggB[k]?aggB[k].d1/aggB[k].c:0;}),type:'scatter',mode:'lines+markers',name:'B组 D1',line:{color:'#3498db',width:2},marker:{size:7}}],{margin:{t:8,r:15,b:35,l:45},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',xaxis:{tickangle:-35},yaxis:{tickformat:'.0%'},legend:{orientation:'h',y:1.08,x:0},height:400},{responsive:true});
+  });
+  addChart(grid,'📋 对比明细','full',function(div){
+    var listA=getSortedList(fA),listB=getSortedList(fB);
+    var all={};listA.forEach(function(s){all[s['花名']]=s;});listB.forEach(function(s){if(!all[s['花名']])all[s['花名']]=s;});
+    var names=Object.keys(all).sort();
+    var h='<tr><th>花名</th><th class="num-col">A分配数</th><th class="num-col">B分配数</th><th class="num-col">A GMV</th><th class="num-col">B GMV</th><th class="num-col">A R值</th><th class="num-col">B R值</th></tr>';
+    names.forEach(function(nm){
+      var a=listA.filter(function(x){return x['花名']===nm;})[0]||{}, b=listB.filter(function(x){return x['花名']===nm;})[0]||{};
+      var aA=a['分配数']||0,bA=b['分配数']||0,aG=a['GMV ']||0,bG=b['GMV ']||0;
+      var aR=aA>0?((aG/aA).toFixed(2)):'-',bR=bA>0?((bG/bA).toFixed(2)):'-';
+      var dA=aA-bA,dG=aG-bG;
+      h+='<tr><td><b>'+nm+'</b></td><td class="num-col">'+aA.toLocaleString()+' <span style="font-size:10px;'+(dA>0?'color:#27ae60':dA<0?'color:#e74c3c':'color:#999')+'">'+(dA>0?'▲':dA<0?'▼':'')+(dA?Math.abs(dA).toLocaleString():'')+'</span></td><td class="num-col">'+bA.toLocaleString()+'</td><td class="num-col">¥'+aG.toLocaleString()+' <span style="font-size:10px;'+(dG>0?'color:#27ae60':dG<0?'color:#e74c3c':'color:#999')+'">'+(dG>0?'▲':dG<0?'▼':'')+(dG?Math.abs(dG).toLocaleString():'')+'</span></td><td class="num-col">¥'+bG.toLocaleString()+'</td><td class="num-col">'+aR+'</td><td class="num-col">'+bR+'</td></tr>';
+    });
+    div.innerHTML='<div class="tbl-wrap"><table>'+h+'</table></div>';
+  });
+}
+
+// ===== Chart Helper =====
+function addChart(grid, title, cols, makeChart) {
+  var box = document.createElement('div');
+  box.className = 'chart-box' + (cols==='full'?' full':'');
+  box.innerHTML = '<div class="chart-header"><h3>'+title+'</h3></div><div class="plot"></div>';
+  grid.appendChild(box);
+  setTimeout(function(){ makeChart(box.querySelector('.plot')); }, 30);
+}
+
+// ===== Event Binding =====
+document.getElementById('resetBtn').addEventListener('click', function() {
+  // Exit compare mode if active
+  if (isCompare) { document.getElementById('cmpToggle').click(); }
+  document.getElementById('fMonth').value = 'all';
+  document.getElementById('fDate').value = 'all';
+  document.getElementById('fTeam').value = 'all';
+  document.getElementById('fSeller').value = 'all';
+  selectedDates.clear();
+  buildDateChips();
+  sortField = 'GMV '; sortDesc = true; topN = 0;
+  if (DATA) { buildOptions(); render(); }
+});
+
+document.getElementById('fMonth').addEventListener('change', function(){if(DATA){selectedDates.clear();buildOptions();render();}});
+document.getElementById('fDate').addEventListener('change', function(){if(DATA){buildOptions();render();}});
+document.getElementById('fTeam').addEventListener('change', function(){if(DATA){buildOptions();render();}});
+document.getElementById('fSeller').addEventListener('change', function(){if(DATA){buildOptions();render();}});
+
+function loadInlineData() {
+  // Try loading embed_data.js as fallback
+  var s = document.createElement('script');
+  s.src = 'embed_data.js';
+  s.onload = function() {
+    if (typeof EMBEDDED_DATA !== 'undefined' && EMBEDDED_DATA && EMBEDDED_DATA.sellerAgg) {
+      initData(EMBEDDED_DATA);
+    }
+  };
+  document.body.appendChild(s);
+}
+</script>
+</body>
+</html>
