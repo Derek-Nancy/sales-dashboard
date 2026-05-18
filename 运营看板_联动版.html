@@ -130,6 +130,10 @@ tr:hover{background:#f5f7fc}
   <div class="card r"><div class="num" id="numR">-</div><div class="lbl">📈 R值 (GMV÷分配数)</div></div>
 </div>
 <div class="filter-bar">
+  <div class="filter-group">
+    <label>📊</label>
+    <select id="fMonth"><option value="all">全部绩效月</option></select>
+  </div>
   <div id="normalFilters" class="filter-group">
     <label>📅</label><select id="fDate"><option value="all">全部营期</option></select>
     <label>👥</label><select id="fTeam"><option value="all">全部小组</option></select>
@@ -185,19 +189,45 @@ var selectedDates = new Set();
 // ===== Build Options (bidirectional cascading) =====
 function buildOptions() {
   if (!DATA) return;
+  buildMonthOptions();
   buildNormalOptions();
   updateFilterHint();
   buildDateChips();
 }
 
+function buildMonthOptions() {
+  var sel = document.getElementById('fMonth');
+  if (!sel) return;
+  var cur = sel.value;
+  sel.innerHTML = '<option value="all">📊 全部绩效月</option>';
+  DATA.months.forEach(function(m) {
+    sel.innerHTML += '<option value="'+m+'">'+m+'</option>';
+  });
+  if (cur !== 'all' && DATA.months.indexOf(cur) >= 0) sel.value = cur;
+}
+
 function buildNormalOptions() {
-  var selD = document.getElementById('fDate'), selT = document.getElementById('fTeam'), selS = document.getElementById('fSeller');
-  var selDate = selD.value, selTeam = selT.value, selSeller = selS.value;
+  var selM = document.getElementById('fMonth'), selD = document.getElementById('fDate'), selT = document.getElementById('fTeam'), selS = document.getElementById('fSeller');
+  var selMonth = selM.value, selDate = selD.value, selTeam = selT.value, selSeller = selS.value;
+
+  // Filter sellers/sellerAgg by month first
+  var monthSellers = new Set();
+  sellerAgg.forEach(function(s) {
+    if (selMonth === 'all' || s['绩效月'] === selMonth) {
+      monthSellers.add(s['花名']);
+    }
+  });
 
   var availDates = new Set();
-  if (selSeller !== 'all') sellerAgg.forEach(function(s){if(s['花名']===selSeller)s['大期'].forEach(function(d){availDates.add(d);});});
-  else if (selTeam !== 'all') Object.keys(DATA.dateToTeam).forEach(function(d){if(DATA.dateToTeam[d].indexOf(selTeam)>=0)availDates.add(d);});
-  else DATA.dates.forEach(function(d){availDates.add(d);});
+  if (selSeller !== 'all') {
+    sellerAgg.forEach(function(s){if(s['花名']===selSeller && (selMonth==='all'||s['绩效月']===selMonth)) s['大期'].forEach(function(d){availDates.add(d);});});
+  } else if (selTeam !== 'all') {
+    Object.keys(DATA.dateToTeam).forEach(function(d){
+      if (DATA.dateToTeam[d].indexOf(selTeam) >= 0 && (selMonth === 'all' || DATA.dateToMonth[d] === selMonth)) availDates.add(d);
+    });
+  } else {
+    DATA.dates.forEach(function(d){if (selMonth === 'all' || DATA.dateToMonth[d] === selMonth) availDates.add(d);});
+  }
   var dateList = Array.from(availDates).sort();
   selD.innerHTML = '<option value="all">📅 全部营期</option>';
   dateList.forEach(function(d){selD.innerHTML+='<option value="'+d+'">'+d.replace('VT','')+'</option>';});
@@ -205,9 +235,13 @@ function buildNormalOptions() {
   selDate=selD.value;
 
   var availTeams = new Set();
-  if(selSeller!=='all') sellerAgg.forEach(function(s){if(s['花名']===selSeller)availTeams.add(s['小组']);});
-  else if(selDate!=='all') (DATA.dateToTeam[selDate]||[]).forEach(function(t){availTeams.add(t);});
-  else DATA.teams.forEach(function(t){availTeams.add(t);});
+  if(selSeller!=='all') {
+    sellerAgg.forEach(function(s){if(s['花名']===selSeller && (selMonth==='all'||s['绩效月']===selMonth)) availTeams.add(s['小组']);});
+  } else if(selDate!=='all') {
+    (DATA.dateToTeam[selDate]||[]).forEach(function(t){availTeams.add(t);});
+  } else {
+    DATA.teams.forEach(function(t){availTeams.add(t);});
+  }
   var teamList = Array.from(availTeams).sort();
   selT.innerHTML='<option value="all">👥 全部小组</option>';
   teamList.forEach(function(t){selT.innerHTML+='<option value="'+t+'">'+t+'</option>';});
@@ -215,10 +249,16 @@ function buildNormalOptions() {
   selTeam=selT.value;
 
   var availSellers = new Set();
-  if(selDate==='all'&&selTeam==='all') DATA.sellers.forEach(function(s){availSellers.add(s);});
-  else if(selDate!=='all'&&selTeam==='all') (DATA.dateToSeller[selDate]||[]).forEach(function(s){availSellers.add(s);});
-  else if(selDate==='all'&&selTeam!=='all') (DATA.teamToSeller[selTeam]||[]).forEach(function(s){availSellers.add(s);});
-  else{var bD=new Set(DATA.dateToSeller[selDate]||[]);var bT=new Set(DATA.teamToSeller[selTeam]||[]);bD.forEach(function(s){if(bT.has(s))availSellers.add(s);});}
+  if(selDate==='all'&&selTeam==='all') {
+    monthSellers.forEach(function(s){availSellers.add(s);});
+  } else if(selDate!=='all'&&selTeam==='all') {
+    (DATA.dateToSeller[selDate]||[]).forEach(function(s){if(monthSellers.has(s))availSellers.add(s);});
+  } else if(selDate==='all'&&selTeam!=='all') {
+    (DATA.teamToSeller[selTeam]||[]).forEach(function(s){if(monthSellers.has(s))availSellers.add(s);});
+  } else {
+    var bD=new Set(DATA.dateToSeller[selDate]||[]);var bT=new Set(DATA.teamToSeller[selTeam]||[]);
+    bD.forEach(function(s){if(bT.has(s)&&monthSellers.has(s))availSellers.add(s);});
+  }
   var sellerList = Array.from(availSellers).sort();
   selS.innerHTML='<option value="all">🧑 全部销售</option>';
   sellerList.forEach(function(s){selS.innerHTML+='<option value="'+s+'">'+s+'</option>';});
@@ -245,15 +285,17 @@ function buildCompareOptions() {
 }
 
 function updateFilterHint() {
-  var d=document.getElementById('fDate').value,t=document.getElementById('fTeam').value,s=document.getElementById('fSeller').value;
+  var m=document.getElementById('fMonth').value,d=document.getElementById('fDate').value,t=document.getElementById('fTeam').value,s=document.getElementById('fSeller').value;
   var parts=[];
+  if(m!=='all')parts.push('绩效月:'+m);
   if(d!=='all')parts.push('营期:'+d.replace('VT',''));
   if(t!=='all')parts.push('小组:'+t);
   if(s!=='all')parts.push('销售:'+s);
   var chips = Array.from(selectedDates);
   if (chips.length > 0) parts.push('多期对比: '+chips.map(function(x){return x.replace('VT','');}).join(','));
   document.getElementById('filterHint').textContent=parts.length>0?'当前筛选: '+parts.join(' · ')+(s==='all'?' ('+document.getElementById('fSeller').options.length+'位销售)':''):'';
-  document.getElementById('filterTag').textContent=s!=='all'?s:(t!=='all'?t:(d!=='all'?d.replace('VT',''):chips.length>0?'多期对比':('所有数据')));
+  var tag = s!=='all'?s:(t!=='all'?t:(d!=='all'?d.replace('VT',''):(m!=='all'?m:(chips.length>0?'多期对比':'所有数据'))));
+  document.getElementById('filterTag').textContent=tag;
 }
 
 // ===== Date Chips (multi-select) =====
@@ -261,7 +303,9 @@ function buildDateChips() {
   var ctnr = document.getElementById('dateChips');
   if (!DATA || !ctnr) return;
   ctnr.innerHTML = '';
-  DATA.dates.forEach(function(d) {
+  var selMonth = document.getElementById('fMonth').value;
+  var dates = DATA.dates.filter(function(d) { return selMonth === 'all' || DATA.dateToMonth[d] === selMonth; });
+  dates.forEach(function(d) {
     var label = d.replace('VT','');
     var chip = document.createElement('span');
     chip.className = 'chip-date' + (selectedDates.has(d) ? ' on' : '');
@@ -282,9 +326,10 @@ document.getElementById('clearDateChips').addEventListener('click', function() {
 });
 
 // ===== Filter =====
-function getFiltered(dv,tv,sv) {
-  var d=dv||document.getElementById('fDate').value, t=tv||document.getElementById('fTeam').value, s=sv||document.getElementById('fSeller').value;
+function getFiltered(mv,dv,tv,sv) {
+  var m=mv||document.getElementById('fMonth').value, d=dv||document.getElementById('fDate').value, t=tv||document.getElementById('fTeam').value, s=sv||document.getElementById('fSeller').value;
   var list=sellerAgg.slice();
+  if(m!=='all')list=list.filter(function(x){return x['绩效月']===m;});
   if(d!=='all')list=list.filter(function(x){return x['大期'].indexOf(d)>=0;});
   if(t!=='all')list=list.filter(function(x){return x['小组']===t;});
   if(s!=='all')list=list.filter(function(x){return x['花名']===s;});
@@ -460,6 +505,7 @@ function addChart(grid, title, cols, makeChart) {
 
 // ===== Event Binding =====
 document.getElementById('resetBtn').addEventListener('click', function() {
+  document.getElementById('fMonth').value = 'all';
   document.getElementById('fDate').value = 'all';
   document.getElementById('fTeam').value = 'all';
   document.getElementById('fSeller').value = 'all';
@@ -469,6 +515,7 @@ document.getElementById('resetBtn').addEventListener('click', function() {
   if (DATA) { buildOptions(); render(); }
 });
 
+document.getElementById('fMonth').addEventListener('change', function(){if(DATA){selectedDates.clear();buildOptions();render();}});
 document.getElementById('fDate').addEventListener('change', function(){if(DATA){buildOptions();render();}});
 document.getElementById('fTeam').addEventListener('change', function(){if(DATA){buildOptions();render();}});
 document.getElementById('fSeller').addEventListener('change', function(){if(DATA){buildOptions();render();}});
