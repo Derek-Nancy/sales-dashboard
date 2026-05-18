@@ -596,33 +596,102 @@ function renderNormal(grid) {
   addChart(grid,'⚠️ 需关注销售','full',function(div){
     var lowR = filter.list.filter(function(x){return x['R值(元/人)'] < 60;});
     var lowSC = filter.list.filter(function(x){return (x['声测率']*100) < 40;});
+    var lowD0 = filter.list.filter(function(x){return (x['D0到课率']*100) < 30;});
+    var lowD1 = filter.list.filter(function(x){return (x['D1到课率']*100) < 30;});
     var bothLow = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['声测率']*100) < 40;});
-    if (lowR.length === 0 && lowSC.length === 0) {
-      div.innerHTML = '<div class="empty-state" style="color:#27ae60">✅ 当前筛选范围内无需要关注的销售</div>';
+    var rD0 = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['D0到课率']*100) < 30;});
+    var rD1 = filter.list.filter(function(x){return x['R值(元/人)'] < 60 && (x['D1到课率']*100) < 30;});
+    var allEmpty = lowR.length+lowSC.length+lowD0.length+lowD1.length===0;
+    if (allEmpty) {
+      div.innerHTML = '<div style="color:#27ae60;text-align:center;padding:20px;font-size:14px">✅ 当前筛选范围内无需要关注的销售</div>';
       return;
     }
-    var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">';
-    html += '<div style="background:#fff5f5;border-radius:10px;padding:10px;border:1px solid #fcc"><div style="font-size:12px;color:#e74c3c;font-weight:700">🔴 低R值 (<60)</div><div style="margin-top:6px">';
-    lowR.forEach(function(s){html += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fde8e8;border-radius:10px;font-size:11px;color:#c0392b">'+s['花名']+' ¥'+s['R值(元/人)']+'</span>';});
-    if (lowR.length === 0) html += '<span style="color:#999;font-size:12px">-</span>';
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+    // 低R值
+    html += '<div style="background:#fff5f5;border-radius:10px;padding:8px;border:1px solid #fcc"><div style="font-size:11px;color:#e74c3c;font-weight:700">🔴 低R值 (<60)</div><div style="margin-top:4px">';
+    lowR.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#fde8e8;border-radius:8px;font-size:10px;color:#c0392b">'+s['花名']+' ¥'+s['R值(元/人)']+'</span>';});
+    if(lowR.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
     html += '</div></div>';
-    html += '<div style="background:#fffef5;border-radius:10px;padding:10px;border:1px solid #ffddaa"><div style="font-size:12px;color:#e67e22;font-weight:700">🟡 低声测率 (<40%)</div><div style="margin-top:6px">';
-    lowSC.forEach(function(s){html += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fef7e0;border-radius:10px;font-size:11px;color:#d35400">'+s['花名']+' '+(s['声测率']*100).toFixed(1)+'%</span>';});
-    if (lowSC.length === 0) html += '<span style="color:#999;font-size:12px">-</span>';
+    // 低声测率
+    html += '<div style="background:#fffef5;border-radius:10px;padding:8px;border:1px solid #ffddaa"><div style="font-size:11px;color:#e67e22;font-weight:700">🟡 低声测率 (<40%)</div><div style="margin-top:4px">';
+    lowSC.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#fef7e0;border-radius:8px;font-size:10px;color:#d35400">'+s['花名']+' '+(s['声测率']*100).toFixed(1)+'%</span>';});
+    if(lowSC.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
     html += '</div></div>';
-    html += '<div style="background:#fff0f0;border-radius:10px;padding:10px;border:1px solid #faa"><div style="font-size:12px;color:#c0392b;font-weight:700">🔴 双重预警（R值+声测率）</div><div style="margin-top:6px">';
-    bothLow.forEach(function(s){html += '<span style="display:inline-block;padding:2px 8px;margin:2px;background:#fdd;border-radius:10px;font-size:11px;color:#c0392b;font-weight:700">'+s['花名']+'</span>';});
-    if (bothLow.length === 0) html += '<span style="color:#999;font-size:12px">-</span>';
-    html += '</div></div></div>';
+    // 低D0到课率
+    html += '<div style="background:#f0f4ff;border-radius:10px;padding:8px;border:1px solid #cce"><div style="font-size:11px;color:#2980b9;font-weight:700">🔵 低D0到课率 (<30%)</div><div style="margin-top:4px">';
+    lowD0.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#dbeafe;border-radius:8px;font-size:10px;color:#1565c0">'+s['花名']+' '+(s['D0到课率']*100).toFixed(1)+'%</span>';});
+    if(lowD0.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // 低D1到课率
+    html += '<div style="background:#faf0ff;border-radius:10px;padding:8px;border:1px solid #ecd"><div style="font-size:11px;color:#8e44ad;font-weight:700">🟣 低D1到课率 (<30%)</div><div style="margin-top:4px">';
+    lowD1.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#f3e5f5;border-radius:8px;font-size:10px;color:#6a1b9a">'+s['花名']+' '+(s['D1到课率']*100).toFixed(1)+'%</span>';});
+    if(lowD1.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // R值+声测双重
+    html += '<div style="background:#fff0f0;border-radius:10px;padding:8px;border:1px solid #faa"><div style="font-size:11px;color:#c0392b;font-weight:700">🔴 R<60 + 声测<40%</div><div style="margin-top:4px">';
+    bothLow.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#fdd;border-radius:8px;font-size:10px;color:#c0392b;font-weight:700">'+s['花名']+'</span>';});
+    if(bothLow.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // R值+D0双重
+    html += '<div style="background:#eef0ff;border-radius:10px;padding:8px;border:1px solid #aac"><div style="font-size:11px;color:#283593;font-weight:700">🔴 R<60 + D0<30%</div><div style="margin-top:4px">';
+    rD0.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#dde4ff;border-radius:8px;font-size:10px;color:#283593;font-weight:700">'+s['花名']+'</span>';});
+    if(rD0.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    // R值+D1双重
+    html += '<div style="background:#f0ebff;border-radius:10px;padding:8px;border:1px solid #cca"><div style="font-size:11px;color:#4a148c;font-weight:700">🔴 R<60 + D1<30%</div><div style="margin-top:4px">';
+    rD1.forEach(function(s){html += '<span style="display:inline-block;padding:1px 6px;margin:1px;background:#ede7f6;border-radius:8px;font-size:10px;color:#4a148c;font-weight:700">'+s['花名']+'</span>';});
+    if(rD1.length===0)html+='<span style="color:#999;font-size:11px">-</span>';
+    html += '</div></div>';
+    html += '</div>';
+    div.innerHTML = html;
+  });
+
+  // PIP统计：每个营期R值低于该营期平均值的人
+  addChart(grid,'📊 PIP统计（各营期低于平均R值的人员）','full',function(div){
+    var periodAvg = getPeriodAvgR(filter);
+    var periodKeys = Object.keys(periodAvg).sort();
+    if (periodKeys.length === 0) { div.innerHTML = '<div class="empty-state">暂无数据</div>'; return; }
+    var html = '';
+    periodKeys.forEach(function(p){
+      var avgR = periodAvg[p];
+      // Find sellers whose R value is below this period's average
+      var belowAvg = filter.list.filter(function(x){
+        return x['大期'].indexOf(p) >= 0 && x['R值(元/人)'] < avgR;
+      });
+      if (belowAvg.length === 0) return;
+      var pLabel = p.replace('VT','');
+      html += '<div style="margin-bottom:8px;border:1px solid #eee;border-radius:8px;padding:8px 10px;background:#fafbfc">'
+        + '<div style="font-size:12px;font-weight:700;color:#e74c3c">📅 '+pLabel+'</div>'
+        + '<div style="font-size:11px;color:#666;margin:2px 0 4px">营期平均R值: ¥<b>'+avgR.toFixed(2)+'</b> ｜ 低于平均值: <b>'+belowAvg.length+'人</b></div>';
+      belowAvg.sort(function(a,b){return (a['R值(元/人)']||0) - (b['R值(元/人)']||0);});
+      belowAvg.forEach(function(s){
+        var rVal = s['R值(元/人)']||0;
+        var diff = avgR - rVal;
+        html += '<span style="display:inline-block;padding:1px 7px;margin:1px;background:#fef0f0;border-radius:8px;font-size:10px;color:#c0392b;border:1px solid #fcc">'
+          + s['花名']+' ¥'+rVal.toFixed(2)+' <span style="color:#999">(低¥'+diff.toFixed(2)+')</span></span>';
+      });
+      html += '</div>';
+    });
+    if (!html) { div.innerHTML = '<div style="color:#27ae60;text-align:center;padding:12px">✅ 当前范围内无低于营期平均R值的销售</div>'; return; }
     div.innerHTML = html;
   });
 }
 
-function getSortedList(filter) {
-  var list = filter.list.slice();
-  var sf = sortField || 'GMV ';
-  list.sort(function(a,b){var av=a[sf]||0,bv=b[sf]||0;return sortDesc?bv-av:av-bv;});
-  return topN>0 ? list.slice(0,topN) : list;
+function getPeriodAvgR(filter) {
+  var periodMap = {};
+  filter.list.forEach(function(x){
+    x['大期'].forEach(function(d){
+      if (!periodMap[d]) periodMap[d] = {totalG:0, totalA:0};
+      periodMap[d].totalG += x['GMV '];
+      periodMap[d].totalA += x['分配数'];
+    });
+  });
+  var result = {};
+  Object.keys(periodMap).forEach(function(d){
+    var o = periodMap[d];
+    result[d] = o.totalA > 0 ? (o.totalG / o.totalA) : 0;
+  });
+  return result;
 }
 
 // ===== Sort UI =====
